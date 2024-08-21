@@ -117,7 +117,7 @@ class DiffusionUtils:
 
   # one step sample 1
   @torch.no_grad()
-  def ddim_p_sample(self, denoise_model, x, t_index, eta):
+  def ddim_p_sample(self, denoise_model, x, t_index, eta, interval):
     """1ステップ逆過程を進む
       Args:
           model ( nn.Module ): U-Net
@@ -125,13 +125,15 @@ class DiffusionUtils:
           t_index ( int ): サンプリングループにおける現在のタイムステップt（サンプル共通）
           prev_t_index ( int ): サンプリングループにおける前のステップ
           eta ( float ): DDIMのノイズに関するハイパーパラメータ
+          interval ( int ): DDIMの高速化パラメータ
       Returns:
           x ( b, c, h, w ): ノイズ画像x_{t-1} or 実画像x_0
     """
     t = torch.full((x.shape[0],), t_index, device=x.device, dtype=torch.long)
     
+    alphas_cumprod_interval_prev = F.pad(self.alphas_cumprod[:-interval], (interval, 0), value=1.0)
     alphas_t = self.extract(self.alphas_cumprod, t, x.shape)
-    alphas_prev_t = self.extract(self.alphas_cumprod_prev, t, x.shape)
+    alphas_prev_t = self.extract(alphas_cumprod_interval_prev, t, x.shape)
 
     # predict noise using model
     epsilon_theta_t = denoise_model(x, t)
@@ -150,7 +152,7 @@ class DiffusionUtils:
 
 
   @torch.no_grad()
-  def ddim_p_sample_loop(self, denoise_model, image_size, batch_size, channels=1, eta=0.0):
+  def ddim_p_sample_loop(self, denoise_model, eta, interval, image_size, batch_size, channels=1):
     """逆過程のステップを繰り返し，画像を生成する
       Args:
           model ( nn.Module ): U-Net
@@ -162,11 +164,14 @@ class DiffusionUtils:
     # 純粋なノイズから逆過程を始める
     shape = (batch_size, channels, image_size, image_size)
     img = torch.randn(shape, device=device)
+    
+    # サンプリングステップのリストを作成
+    sampling_steps = list(reversed(range(0, self.timesteps, interval)))
 
     # ループ
     imgs = []
-    for t in tqdm(reversed(range(0, self.timesteps)), desc='sampling loop time step', total=self.timesteps):
-      img = self.ddim_p_sample(denoise_model, img, t, eta)
+    for t in tqdm(sampling_steps, desc='sampling loop time step', total=len(sampling_steps)):
+      img = self.ddim_p_sample(denoise_model, img, t, eta, interval)
       imgs.append(img.cpu().numpy())
 
     return imgs
