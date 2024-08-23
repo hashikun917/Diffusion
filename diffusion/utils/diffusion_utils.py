@@ -104,7 +104,7 @@ class DiffusionUtils:
     img = torch.randn(shape, device=device)
 
     # ループ
-    imgs = []
+    imgs = [img]
     for t in tqdm(reversed(range(0, self.timesteps)), desc='sampling loop time step', total=self.timesteps):
       img = self.ddpm_p_sample(denoise_model, img, t)
       imgs.append(img.cpu().numpy())
@@ -197,7 +197,7 @@ class DiffusionUtils:
       sampling_steps = list(reversed(range(0, self.timesteps, interval)))
 
       # ループ
-      imgs = []
+      imgs = [img]
       for t in tqdm(sampling_steps, desc='sampling loop time step', total=len(sampling_steps)):
         img = self.ddim_p_sample(denoise_model, img, t, eta, interval)
         imgs.append(img)
@@ -208,7 +208,7 @@ class DiffusionUtils:
     if reverse:
       sampling_steps = range(0, self.timesteps, interval)
       img = input_img
-      imgs = []
+      imgs = [img]
       for t in tqdm(sampling_steps, desc='sampling loop time step', total=len(sampling_steps)):
         img = self.ddim_p_sample(denoise_model, img, t, eta, interval, reverse=True)
         imgs.append(img)

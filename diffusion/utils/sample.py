@@ -15,7 +15,7 @@ def ddpm_plot_samples(denoise_model, batch_size, timesteps):
     fig, axes = plt.subplots(1, batch_size, figsize=(15, 3))
     for i in range(batch_size):
         ax = axes[i]
-        img = imgs[timesteps-1][i].squeeze()
+        img = imgs[timesteps][i].squeeze()
         ax.imshow(img, cmap='gray')
 
     plt.show()
@@ -41,8 +41,8 @@ def ddim_plot_samples(denoise_model, eta, interval, batch_size, timesteps, rever
         fig, axes = plt.subplots(1, batch_size, figsize=(15, 3))
         for i in range(batch_size):
             ax = axes[i]
-            steps = timesteps % interval
-            ax.imshow(imgs[steps-1][i].cpu().numpy().squeeze(), cmap='gray')
+            steps = int(timesteps / interval)
+            ax.imshow(imgs[steps][i].cpu().numpy().squeeze(), cmap='gray')
 
         plt.show()
     
@@ -55,10 +55,10 @@ def ddim_plot_samples(denoise_model, eta, interval, batch_size, timesteps, rever
         for i in range(batch_size):
             axes[0, i].imshow(input_img[i].squeeze().cpu().numpy(), cmap='gray')
             
-            steps = timesteps % interval
-            axes[1, i].imshow(imgs[steps-1][i].cpu().numpy().squeeze(), cmap='gray')
+            steps = int(timesteps / interval)
+            axes[1, i].imshow(imgs[steps][i].cpu().numpy().squeeze(), cmap='gray')
 
         mse_loss = nn.MSELoss()
-        loss = mse_loss(input_img, imgs[steps-1])
+        loss = mse_loss(input_img, imgs[steps])
         print('平均二乗誤差:', loss.item())
         plt.show()
