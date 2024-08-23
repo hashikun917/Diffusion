@@ -104,7 +104,7 @@ class DiffusionUtils:
     img = torch.randn(shape, device=device)
 
     # ループ
-    imgs = []
+    imgs = [img]
     for t in tqdm(reversed(range(0, self.timesteps)), desc='sampling loop time step', total=self.timesteps):
       img = self.ddpm_p_sample(denoise_model, img, t)
       imgs.append(img.cpu().numpy())
@@ -117,7 +117,7 @@ class DiffusionUtils:
 
   # one step sample 1
   @torch.no_grad()
-  def ddim_p_sample(self, denoise_model, x, t_index, eta, interval):
+  def ddim_p_sample(self, denoise_model, x, t_index, eta, interval, reverse=False):
     """1ステップ逆過程を進む
       Args:
           model ( nn.Module ): U-Net
@@ -125,56 +125,92 @@ class DiffusionUtils:
           t_index ( int ): サンプリングループにおける現在のタイムステップt（サンプル共通）
           prev_t_index ( int ): サンプリングループにおける前のステップ
           eta ( float ): DDIMのノイズに関するハイパーパラメータ
-          interval ( int ): DDIMの高速化パラメータ
+          interval ( int ): 拡散ステップの間隔
+          reverse ( bool ): 生成過程or推論過程を指定
       Returns:
-          x ( b, c, h, w ): ノイズ画像x_{t-1} or 実画像x_0
+          x ( b, c, h, w ): 前の時刻または次の時刻のノイズ画像
     """
     t = torch.full((x.shape[0],), t_index, device=x.device, dtype=torch.long)
     
-    alphas_cumprod_interval_prev = F.pad(self.alphas_cumprod[:-interval], (interval, 0), value=1.0)
-    alphas_t = self.extract(self.alphas_cumprod, t, x.shape)
-    alphas_prev_t = self.extract(alphas_cumprod_interval_prev, t, x.shape)
+    # 生成過程の場合
+    if not reverse: 
+      alphas_cumprod_interval_prev = F.pad(self.alphas_cumprod[:-interval], (interval, 0), value=1.0)
+      alphas_t = self.extract(self.alphas_cumprod, t, x.shape)
+      alphas_prev_t = self.extract(alphas_cumprod_interval_prev, t, x.shape)
 
-    # predict noise using model
-    epsilon_theta_t = denoise_model(x, t)
+      # predict noise using model
+      epsilon_theta_t = denoise_model(x, t)
 
-    # calculate x_{t-1}
-    sigma_t = eta * torch.sqrt((1 - alphas_prev_t) / (1 - alphas_t) * (1 - alphas_t / alphas_prev_t))
-    epsilon_t = torch.randn_like(x)
-    x_t_minus_one = (
-            torch.sqrt(alphas_prev_t / alphas_t) * x +
-            (torch.sqrt(1 - alphas_prev_t - sigma_t ** 2) - torch.sqrt(
-                (alphas_prev_t * (1 - alphas_t)) / alphas_t)) * epsilon_theta_t +
-            sigma_t * epsilon_t
-    )
-    return x_t_minus_one
-      
+      # calculate x_{t-1}
+      sigma_t = eta * torch.sqrt((1 - alphas_prev_t) / (1 - alphas_t) * (1 - alphas_t / alphas_prev_t))
+      epsilon_t = torch.randn_like(x)
+      x_t_prev = (
+              torch.sqrt(alphas_prev_t / alphas_t) * x +
+              (torch.sqrt(1 - alphas_prev_t - sigma_t ** 2) - torch.sqrt(
+                  (alphas_prev_t * (1 - alphas_t)) / alphas_t)) * epsilon_theta_t +
+              sigma_t * epsilon_t
+      )
+      return x_t_prev
+    
+    # 推論過程の場合
+    if reverse:
+      alphas_cumprod_interval_next = F.pad(self.alphas_cumprod[interval:], (0, interval), value=self.alphas_cumprod[interval:][-1])
+      alphas_t = self.extract(self.alphas_cumprod, t, x.shape)
+      alphas_next_t = self.extract(alphas_cumprod_interval_next, t, x.shape)
 
+      # predict noise using model
+      epsilon_theta_t = denoise_model(x, t)
+
+      # calculate x_{t+1}
+      x_t_next = (
+              torch.sqrt(alphas_next_t / alphas_t) * x +
+              (torch.sqrt(1 - alphas_next_t) - torch.sqrt(
+                  (alphas_next_t * (1 - alphas_t)) / alphas_t)) * epsilon_theta_t
+      )
+      return x_t_next
 
   @torch.no_grad()
-  def ddim_p_sample_loop(self, denoise_model, eta, interval, image_size, batch_size, channels=1):
+  def ddim_p_sample_loop(self, denoise_model, eta, interval, image_size, batch_size, channels=1, reverse=False, input_img=None, noise=None):
     """逆過程のステップを繰り返し，画像を生成する
       Args:
           model ( nn.Module ): U-Net
           image_size ( int ): 画像サイズ
+          reverse ( bool ): 生成過程or推論過程を指定
+          input_img ( b, c, h, w ): 推論過程の場合、入力の画像
+          noise ( b, c, h, w ): 画像の再構成を行う場合、拡散後のノイズ
       Returns:
           imgs ( b, c, h, w ): 生成画像
     """
-
-    # 純粋なノイズから逆過程を始める
-    shape = (batch_size, channels, image_size, image_size)
-    img = torch.randn(shape, device=device)
     
-    # サンプリングステップのリストを作成
-    sampling_steps = list(reversed(range(0, self.timesteps, interval)))
+    # 生成過程の場合
+    if not reverse:
+      
+      if noise is None:
+        # 通常の生成の場合
+        shape = (batch_size, channels, image_size, image_size)
+        img = torch.randn(shape, device=device)
+      else: 
+        # 再構成の場合のノイズ
+        img = noise
+      
+      # サンプリングステップのリストを作成
+      sampling_steps = list(reversed(range(0, self.timesteps, interval)))
 
-    # ループ
-    imgs = []
-    for t in tqdm(sampling_steps, desc='sampling loop time step', total=len(sampling_steps)):
-      img = self.ddim_p_sample(denoise_model, img, t, eta, interval)
-      imgs.append(img.cpu().numpy())
+      # ループ
+      imgs = [img]
+      for t in tqdm(sampling_steps, desc='sampling loop time step', total=len(sampling_steps)):
+        img = self.ddim_p_sample(denoise_model, img, t, eta, interval)
+        imgs.append(img)
 
-    return imgs
-
+      return imgs
     
-    
+    # 推論過程の場合
+    if reverse:
+      sampling_steps = range(0, self.timesteps, interval)
+      img = input_img
+      imgs = [img]
+      for t in tqdm(sampling_steps, desc='sampling loop time step', total=len(sampling_steps)):
+        img = self.ddim_p_sample(denoise_model, img, t, eta, interval, reverse=True)
+        imgs.append(img)
+      
+      return imgs
