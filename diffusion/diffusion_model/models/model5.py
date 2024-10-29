@@ -155,7 +155,7 @@ class TimeEmbedding(nn.Module):
 
 
 
-class DenoiseModel(nn.Module):
+class ConditionalDenoiseModel(nn.Module):
     """
     時刻情報tと条件情報cを埋め込んだU-Netの実装
 
@@ -174,8 +174,8 @@ class DenoiseModel(nn.Module):
         logits (torch.Tensor): Tensor of shape (batch_size, n_classes, height, width)
     """
 
-    def __init__(self, n_channels=1, n_classes=1, time_dim=64, cond_dim=64):
-        super(DenoiseModel, self).__init__()
+    def __init__(self, n_channels=1, n_classes=1, time_dim=64, cond_dim=2):
+        super(ConditionalDenoiseModel, self).__init__()
         self.time_dim = time_dim
         self.cond_dim = cond_dim
 

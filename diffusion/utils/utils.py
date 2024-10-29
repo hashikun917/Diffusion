@@ -1,4 +1,5 @@
 import torch
+import importlib
 
 def save_checkpoint(denoise_model, optimizer, scheduler, epoch, loss, filename='checkpoint.pth'):
   checkpoint = {
@@ -18,3 +19,13 @@ def load_checkpoint(denoise_model, optimizer, scheduler, filename='checkpoint.pt
   epoch = checkpoint['epoch']
   loss = checkpoint['loss']
   return denoise_model, optimizer, scheduler, epoch, loss
+
+def load_model_from_file(file_path, class_name):
+    # importlibを使ってモジュールをロード
+    spec = importlib.util.spec_from_file_location(file_path[:-3], file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # クラスを取得
+    cls = getattr(module, class_name)
+    return cls

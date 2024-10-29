@@ -2,12 +2,9 @@ import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-timesteps = 1000 # config設定できないか？
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class DiffusionUtils:
-  def __init__(self, timesteps=500, beta_start=1e-4, beta_end=0.02, device=None):
+  def __init__(self, timesteps, beta_start=1e-4, beta_end=0.02, device=None):
     self.timesteps = timesteps
     self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     self.betas = self.linear_beta_schedule(beta_start, beta_end).to(self.device)
@@ -46,7 +43,7 @@ class DiffusionUtils:
     return torch.sqrt(alphas_cumprod_t) * x_start + torch.sqrt(1 - alphas_cumprod_t) * noise
 
 
-  def p_losses(self, denoise_model, x_start, t, noise=None):
+  def p_losses(self, denoise_model, x_start, t, noise=None, c=None):
     """
       Args:
           denoise_model ( nn.Module ): U-Net
@@ -57,7 +54,12 @@ class DiffusionUtils:
       noise = torch.randn_like(x_start)
 
     x_noisy = self.q_sample(x_start, t, noise)
-    predicted_noise = denoise_model(x_noisy, t)
+    
+    if c is None:
+      predicted_noise = denoise_model(x_noisy, t)
+    elif c is not None:
+      predicted_noise = denoise_model(x_noisy, t, c)
+  
     loss = F.mse_loss(noise, predicted_noise)
 
     return loss
@@ -101,7 +103,7 @@ class DiffusionUtils:
 
     # 純粋なノイズから逆過程を始める
     shape = (batch_size, channels, image_size, image_size)
-    img = torch.randn(shape, device=device)
+    img = torch.randn(shape, device=self.device)
 
     # ループ
     imgs = [img]
@@ -188,7 +190,7 @@ class DiffusionUtils:
       if noise is None:
         # 通常の生成の場合
         shape = (batch_size, channels, image_size, image_size)
-        img = torch.randn(shape, device=device)
+        img = torch.randn(shape, device=self.device)
       else: 
         # 再構成の場合のノイズ
         img = noise

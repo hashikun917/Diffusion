@@ -1,0 +1,11 @@
+{
+    "epochs": 100,
+    "batch_size": 64,
+    "timesteps": 500,
+    "dataset_path": "/home/hashikami/datadrive/MorphoMNIST",
+    "model_path": "/home/hashikami/anaconda3/envs/Diff/content/diffusion/diffusion_model/models/model5.py",
+    "model_name": "ConditionalDenoiseModel",
+    "optimizer_type": "Adam",
+    "checkpoint_dir": "/home/hashikami/checkpoint",
+    "checkpoint_path": " "
+}
