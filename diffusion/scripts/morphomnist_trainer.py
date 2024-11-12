@@ -10,10 +10,9 @@ import zipfile
 from datetime import datetime
 import shutil
 
-from diffusion.diffusion_model.models.model5 import ConditionalDenoiseModel
 from diffusion.utils.utils import save_checkpoint, load_checkpoint, load_model_from_file
 from diffusion.utils.diffusion_utils import DiffusionUtils
-from diffusion.utils.sample import ddim_plot_samples
+from diffusion.utils.sample import conditional_ddim_plot_samples
 from dataset.morphomnist import MorphoMNISTLike
 
 
@@ -94,13 +93,13 @@ class Trainer:
 
       # Save checkpoint
       if (e + 1) % self.save_interval == 0:
-        date = datetime.now().strftime("%Y%m%d")
+        date = datetime.now().strftime("%Y-%m-%d_%H")
         save_checkpoint(self.denoise_model, self.optimizer, self.scheduler, e + 1, loss.item(),
                           filename=os.path.join(self.checkpoint_dir, f'checkpoint_{date}.pth'))
       if (e + 1) % self.plot_interval == 0:
         plot_start_time = time.time()
-        # 無条件DDIM生成によるプロット
-        ddim_plot_samples(self.denoise_model, eta=0, interval=1, batch_size=5, timesteps=self.timesteps, reverse=False, input_img=None)
+        # 条件付きDDIM生成によるプロット
+        conditional_ddim_plot_samples(self.denoise_model, eta=0.0, interval=1, batch_size=5, cond=metrics[:5], timesteps=self.timesteps)
         if not os.path.exists(result_dir + '/samples'):
           os.mkdir(result_dir + '/samples')
         plt.savefig(result_dir + f'/samples/epoch{e + 1}.png')

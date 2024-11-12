@@ -11,9 +11,12 @@ import torch.nn.functional as F
 ・グループ正規化を多用する
 
 ・条件情報（連続値）を加味できるようにしている
+・条件の埋め込みの方法以下のように設定
+Linear(cond_dim, 100) ⇒ ReLU() ⇒ Linear(100, 512)
+
 
 チェックポイント
-checkpoint_20241022.pth
+checkpoint_20241112_14.pth
 """
 
 
@@ -189,7 +192,11 @@ class ConditionalDenoiseModel(nn.Module):
         self.outc = OutConv(64, n_classes)  # to (b, n_classes, h, w)
 
         self.time_embed = TimeEmbedding(time_dim)
-        self.cond_embed = nn.Linear(cond_dim, 512)  # Embed condition to match the size of the bottleneck
+        self.cond_embed = nn.Sequential(
+          nn.Linear(cond_dim, 100),
+          nn.ReLU(),
+          nn.Linear(100, 512)
+          )  # Embed condition to match the size of the bottleneck
 
     def forward(self, x, t, c=None):
         # Embed time
