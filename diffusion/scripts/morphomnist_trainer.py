@@ -10,7 +10,7 @@ import zipfile
 from datetime import datetime
 import shutil
 
-from diffusion.utils.utils import save_checkpoint, load_checkpoint, load_model_from_file
+from diffusion.utils.utils import save_checkpoint, load_checkpoint, load_model_from_file, resize_images
 from diffusion.utils.diffusion_utils import DiffusionUtils
 from diffusion.utils.sample import conditional_ddim_plot_samples
 from dataset.morphomnist import MorphoMNISTLike
@@ -30,6 +30,14 @@ class Trainer:
     self.dataset_path = self.config['dataset_path'] # データセットのパス
     self.model_path = self.config['model_path']
     self.model_name = self.config['model_name']
+    self.ch_mul = self.config['ch_mul']
+    self.num_res_blocks = self.config['num_res_blocks']
+    self.num_groups = self.config['num_groups']
+    self.droprate = self.config['droprate']
+    self.cond_type = self.config['cond_type']
+    self.use_attn = self.config['use_attn']
+    self.uncond_rate = self.config['uncond_rate']
+    self.guidance_scale = self.config['guidance_scale']
     self.optimizer_type = self.config['optimizer_type']
     self.checkpoint_dir = self.config['checkpoint_dir']
     self.result_dir = result_dir
@@ -42,7 +50,7 @@ class Trainer:
     
     # Model, optimizer, and scheduler setup
     loaded_model = load_model_from_file(self.model_path, self.model_name)
-    self.denoise_model = loaded_model().to(self.device)
+    self.denoise_model = loaded_model(ch_mul=self.ch_mul, num_res_blocks=self.num_res_blocks, num_groups=self.num_groups, droprate=self.droprate, cond_type=self.cond_type, use_attn=self.use_attn).to(self.device)
     # self.denoise_model = ConditionalDenoiseModel().to(self.device)
     
     if self.optimizer_type == 'Adam':
@@ -74,9 +82,14 @@ class Trainer:
         self.optimizer.zero_grad()
         
         images = batch['image'].unsqueeze(1).to(self.device).float() / 255.0 # チャネルを追加してデータの正規化
+        images = resize_images(images, (32, 32))
         intensity = batch['intensity'][:, None].float() # (batch, ) to (batch, 1)
         thickness = batch['thickness'][:, None].float()
         metrics = torch.cat([intensity, thickness], dim=1).to(self.device)
+        # 一定確率で条件情報をドロップアウト
+        drop_mask = (torch.rand(metrics.shape[0], 1, device=self.device) < self.uncond_rate).float()  # shape: (B, 1)
+        metrics = metrics * (1.0 - drop_mask)  # 値を0にする
+      
         
         b = images.shape[0]
         t = torch.randint(0, self.timesteps, (b,), device=self.device).long()
@@ -99,7 +112,7 @@ class Trainer:
       if (e + 1) % self.plot_interval == 0:
         plot_start_time = time.time()
         # 条件付きDDIM生成によるプロット
-        conditional_ddim_plot_samples(self.denoise_model, eta=0.0, interval=1, batch_size=5, cond=metrics[:5], timesteps=self.timesteps)
+        conditional_ddim_plot_samples(self.denoise_model, eta=0.0, interval=1, cond=metrics[:5], w=self.guidance_scale, batch_size=5, image_size=32, timesteps=self.timesteps)
         if not os.path.exists(result_dir + '/samples'):
           os.mkdir(result_dir + '/samples')
         plt.savefig(result_dir + f'/samples/epoch{e + 1}.png')

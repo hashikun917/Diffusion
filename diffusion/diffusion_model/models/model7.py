@@ -15,7 +15,7 @@ import torch.nn.functional as F
 Linear(cond_dim, 128) => ReLU() => Linear(128, 256) => ReLU() => Linear(256, 512)
 
 チェックポイント
-checkpoint_20241112_15.pth
+checkpoint_2024-11-12_15.pth
 """
 
 

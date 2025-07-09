@@ -12,11 +12,10 @@ import torch.nn.functional as F
 
 ・条件情報（連続値）を加味できるようにしている
 ・条件の埋め込みの方法以下のように設定
-Linear(cond_dim, 100) ⇒ ReLU() ⇒ Linear(100, 512)
-
+Linear(cond_dim, 64) => ReLU() => Linear(64, 128) => ReLU() =>  Linear(128, 256) => ReLU() => Linear(256, 512)
 
 チェックポイント
-checkpoint_2024-11-12_14.pth
+checkpoint_2024-11-14_14.pth
 """
 
 
@@ -193,10 +192,14 @@ class ConditionalDenoiseModel(nn.Module):
 
         self.time_embed = TimeEmbedding(time_dim)
         self.cond_embed = nn.Sequential(
-          nn.Linear(cond_dim, 100),
-          nn.ReLU(),
-          nn.Linear(100, 512)
-          )  # Embed condition to match the size of the bottleneck
+                nn.Linear(cond_dim, 64),
+                nn.ReLU(),
+                nn.Linear(64, 128),
+                nn.ReLU(),
+                nn.Linear(128, 256),
+                nn.ReLU(),
+                nn.Linear(256, 512))
+            # Embed condition to match the size of the bottleneck
 
     def forward(self, x, t, c=None):
         # Embed time

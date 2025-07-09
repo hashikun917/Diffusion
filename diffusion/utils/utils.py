@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import importlib
 
 def save_checkpoint(denoise_model, optimizer, scheduler, epoch, loss, filename='checkpoint.pth'):
@@ -29,3 +30,18 @@ def load_model_from_file(file_path, class_name):
     # クラスを取得
     cls = getattr(module, class_name)
     return cls
+  
+def resize_images(images, new_size):
+  """
+  Resize a batch of images to a new size using bilinear interpolation.
+  
+  Args:
+      images (torch.Tensor): A batch of images with shape (batch_size, channels, height, width).
+      new_size (tuple): The desired size (height, width) for the resized images.
+      
+  Returns:
+      torch.Tensor: The resized images with shape (batch_size, channels, new_height, new_width).
+  """
+  # Resize the images
+  resized_images = F.interpolate(images, size=new_size, mode='bilinear', align_corners=False)
+  return resized_images
