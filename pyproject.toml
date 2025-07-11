@@ -1,0 +1,21 @@
+[project]
+name = "diffusion_model_research_project"
+version = "0.1.0"
+description = "Research code for master study: diffusion models and causal inference."
+authors = [{ name = "Takeshi Hashikami" }]
+readme = "README.md"
+requires-python = ">=3.8, <=3.10"
+dependencies = [
+    "matplotlib>=3.7.5",
+    "numpy>=1.24.4",
+    "pandas>=2.0.3",
+    "torch==1.13.1",
+    "torchvision>=0.11.3",
+    "tqdm>=4.67.1",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+]
+
