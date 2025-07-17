@@ -10,24 +10,26 @@ import zipfile
 from datetime import datetime
 import shutil
 
-from diffusion.utils.utils import save_checkpoint, load_checkpoint, load_model_from_file, resize_images
+from diffusion.utils.utils import load_json, save_checkpoint, load_checkpoint, load_model_from_file, resize_images
 from diffusion.utils.diffusion_utils import DiffusionUtils
 from diffusion.utils.sample import conditional_ddim_plot_samples
+from diffusion.utils.preprocess import scale_conditions
 from dataset.morphomnist import MorphoMNISTLike
 
 
 class Trainer:
-  def __init__(self, config_path, result_dir):
+  def __init__(self, config_path, result_dir, cond_stats_path):
     # Load configuration from json file
-    with open(config_path, 'r') as f:
-      self.config = json.load(f)
-      
+    
+    self.config = load_json(config_path)
+    self.cond_stats = load_json(cond_stats_path)
     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     self.epochs = self.config['epochs']
     self.batch_size = self.config['batch_size']
     self.timesteps = self.config['timesteps']
     #self.dataset = self.config['dataset'] # 扱うデータセットを指定
     self.dataset_path = self.config['dataset_path'] # データセットのパス
+    self.use_minmax_scale = self.config['use_minmax_scale']
     self.model_path = self.config['model_path']
     self.model_name = self.config['model_name']
     self.ch_mul = self.config['ch_mul']
@@ -86,6 +88,8 @@ class Trainer:
         intensity = batch['intensity'][:, None].float() # (batch, ) to (batch, 1)
         thickness = batch['thickness'][:, None].float()
         metrics = torch.cat([intensity, thickness], dim=1).to(self.device)
+        if self.use_minmax_scale:
+          metrics = scale_conditions(metrics, ['intensity', 'thickness'], self.cond_stats)
         # 一定確率で条件情報をドロップアウト
         drop_mask = (torch.rand(metrics.shape[0], 1, device=self.device) < self.uncond_rate).float()  # shape: (B, 1)
         metrics = metrics * (1.0 - drop_mask)  # 値を0にする
@@ -202,17 +206,18 @@ if __name__ == '__main__':
   import sys
   from datetime import datetime
   
-  if len(sys.argv) != 3:
-    print("Usage python morphomnist_trainer.py <config_path> <results_path>")
+  if len(sys.argv) != 4:
+    print("Usage python morphomnist_trainer.py <config_path> <results_path> <cond_stats_path")
     sys.exit(1)
     
   config_path = sys.argv[1]
   results_path = sys.argv[2]
+  cond_stats_path = sys.argv[3]
   
   # Create a directory for the current training session base on the current date
   current_date = datetime.now().strftime('%Y-%m-%d_%H')
   result_dir = os.path.join(results_path, current_date)
   os.makedirs(result_dir, exist_ok=True)
   
-  trainer = Trainer(config_path, result_dir)
+  trainer = Trainer(config_path, result_dir, cond_stats_path)
   trainer.train()

@@ -1,6 +1,11 @@
 import torch
 import torch.nn.functional as F
 import importlib
+import json
+
+def load_json(json_path: str) -> dict:
+  with open(json_path, "r") as f:
+    return json.load(f)
 
 def save_checkpoint(denoise_model, optimizer, scheduler, epoch, loss, filename='checkpoint.pth'):
   checkpoint = {
