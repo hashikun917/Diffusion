@@ -10,11 +10,13 @@ import zipfile
 from datetime import datetime
 import shutil
 
+
 from diffusion.utils.utils import load_json, save_checkpoint, load_checkpoint, load_model_from_file, resize_images
 from diffusion.utils.diffusion_utils import DiffusionUtils
 from diffusion.utils.sample import conditional_ddim_plot_samples
 from diffusion.utils.preprocess import scale_conditions
 from dataset.morphomnist import MorphoMNISTLike
+
 
 
 class Trainer:
@@ -24,6 +26,7 @@ class Trainer:
     self.config = load_json(config_path)
     self.cond_stats = load_json(cond_stats_path)
     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    self.image_size = self.config['image_size']
     self.epochs = self.config['epochs']
     self.batch_size = self.config['batch_size']
     self.timesteps = self.config['timesteps']
@@ -84,7 +87,8 @@ class Trainer:
         self.optimizer.zero_grad()
         
         images = batch['image'].unsqueeze(1).to(self.device).float() / 255.0 # チャネルを追加してデータの正規化
-        images = resize_images(images, (32, 32))
+        if self.image_size != images.shape[2]:
+          images = resize_images(images, (32, 32))
         intensity = batch['intensity'][:, None].float() # (batch, ) to (batch, 1)
         thickness = batch['thickness'][:, None].float()
         metrics = torch.cat([intensity, thickness], dim=1).to(self.device)

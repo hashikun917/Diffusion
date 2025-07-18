@@ -1,5 +1,6 @@
 {
     "epochs": 100,
+    "image_size": 28, 
     "batch_size": 64,
     "timesteps": 500,
     "dataset_path": "/home/hashikami/datadrive/MorphoMNIST",
