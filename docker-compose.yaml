@@ -1,0 +1,18 @@
+version: "3.3"
+
+services:
+  ml:
+    build: .
+    command: /bin/bash
+    env_file:
+      - .env
+    image: $DOCKER_IMAGE
+    volumes:
+      - ./:/workspace
+      - ~/datadrive:/datadrive
+      - ~/checkpoint/:/checkpoint
+    working_dir: /workspace
+  
+    # Jupyter など必要なら
+    ports:
+      - "8888:8888"
