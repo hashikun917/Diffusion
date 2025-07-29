@@ -2,7 +2,7 @@ image_data: 'Morpho-MNIST'
 
 meta_data:
   causal_mech: 'tanh'
-  n_samples: 256
+  n_samples: 1024
   d: 3
   s0: 3
   graph_type: 'ER'
@@ -18,7 +18,7 @@ carefl:
   net_class: 'mlp4'
   nh: 100
   prior_dist: 'normal'
-  scale_shift_base: true
+  scale_shift_base: false
 
 training:
   epochs: 200
