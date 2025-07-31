@@ -84,11 +84,36 @@ class CAREFL:
             else:
                 z, _ = affine.backward(z)
                 
-        return z
+        return z.detach().cpu().numpy()
     
         
-    def predict_counterfactual(self, ):
-        return 
+    def predict_counterfactual(self, x_obs, cf_idx, cf_val):
+        
+        if isinstance(cf_idx, (int, np.integer)):
+            cf_idx = [cf_idx]
+        if np.isscalar(cf_val):
+            cf_val = [float(cf_val)]
+        assert len(cf_idx) == len(cf_val)
+
+        cf_idx = list(cf_idx)
+        cf_val = list(cf_val)
+        device = self.device
+        
+        flows = self.flow.flow.flows
+        
+        # Abduction: 観測変数に対応する潜在変数を推定
+        x_obs = torch.from_numpy(x_obs.astype(np.float32)).to(device)
+        z = self.flow.forward(x_obs)[0][-1]
+        
+        # Action & Prediction: 介入による因果モデルの変更と観測に対応する潜在変数を用いた推論
+        for affine in flows[::-1]:
+            trans_idx = affine.trans_idx[0]
+            if trans_idx in cf_idx:
+                z[:, trans_idx] = cf_val[cf_idx.index(trans_idx)]
+            else:
+                z, _ = affine.backward(z)
+        
+        return z.detach().cpu().numpy()
 
 
     def _get_flow_arch(self):
@@ -116,7 +141,7 @@ class CAREFL:
         for v in ordered_vertices[::-1]:
         #for v in ordered_vertices:
             cond_idx = G.neighbors(v, mode=ig.IN)
-            affine = DAGAffineCL(d, cond_idx, [v], net_class, self.carefl.nh, self.carefl.scale_shift_base)
+            affine = DAGAffineCL(d, cond_idx, [v], net_class, self.carefl.nh, self.carefl.scale_shift_base, self.carefl.inverse_model)
             flow_list.append(affine)
         
         flow = NormalizingFlowModel(prior, flow_list).to(self.device)
@@ -125,9 +150,12 @@ class CAREFL:
             
 
 
-    def _train(self):
+    def _train(self, X=None):
         
-        self.X = self._simulate_sem()
+        if X is None:
+            self.X = self._simulate_sem()
+        else:
+            self.X = X
         dset = self._get_datasets(self.X)
         train_loader = DataLoader(dset, shuffle=True, batch_size=self.training.batch_size)
 

@@ -6,11 +6,12 @@ from carefl.nflib.nets import MLP4
 
 class DAGAffineCL(nn.Module):
     
-    def __init__(self, dim, cond_idx, trans_idx, net_class=MLP4, nh=24, scale_shift_base=False):
+    def __init__(self, dim, cond_idx, trans_idx, net_class=MLP4, nh=24, scale_shift_base=False, inverse_model=False):
         super().__init__()
         self.dim = dim
         self.cond_idx = cond_idx
         self.trans_idx = trans_idx
+        self.inverse_model = inverse_model
         # self.id_idx = [i for i in range(dim) if i not in self.trans_idx]  # unchanged part
         
         in_dim = len(self.cond_idx)
@@ -36,11 +37,16 @@ class DAGAffineCL(nn.Module):
             s = self.s_base if self.s_base is not None else torch.zeros_like(x_trans)
             t = self.t_base if self.t_base is not None else torch.zeros_like(x_trans)
                 
-       
-        z_trans = x_trans * torch.exp(s) + t
-        z = x.clone()
-        z[:, self.trans_idx] = z_trans
-        log_det = torch.sum(s, dim=1)
+        if not self.inverse_model:
+            z_trans = x_trans * torch.exp(s) + t
+            z = x.clone()
+            z[:, self.trans_idx] = z_trans
+            log_det = torch.sum(s, dim=1)
+        else:
+            z_trans = (x_trans - t) * torch.exp(-s)
+            z = x.clone()
+            z[:, self.trans_idx] = z_trans
+            log_det = -torch.sum(s, dim=1)
         
         return z, log_det
     
@@ -55,10 +61,17 @@ class DAGAffineCL(nn.Module):
             s = self.s_base if self.s_base is not None else torch.zeros_like(z_trans)
             t = self.t_base if self.t_base is not None else torch.zeros_like(z_trans)
             
-        x_trans = (z_trans - t) * torch.exp(-s)
-        x = z.clone()
-        x[:, self.trans_idx] = x_trans
-        log_det = -torch.sum(s, dim=1)
+        if not self.inverse_model:  
+            x_trans = (z_trans - t) * torch.exp(-s)
+            x = z.clone()
+            x[:, self.trans_idx] = x_trans
+            log_det = -torch.sum(s, dim=1)
+        else:
+            x_trans = z_trans * torch.exp(s) + t
+            x = z.clone()
+            x[:, self.trans_idx] = x_trans
+            log_det = torch.sum(s, dim=1)
+            
         return x, log_det
     
 class NormalizingFlow(nn.Module):

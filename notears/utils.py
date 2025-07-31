@@ -142,7 +142,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
     return X
 
 
-def simulate_nonlinear_sem(W, gamma, n, sem_type, noise_scale=None):
+def simulate_nonlinear_sem(W, gamma, n, sem_type, noise_scale=None, use_z=False):
     """Simulate samples from non-linear SEM with specified type of noise.
 
     For uniform, noise z ~ uniform(-a, a), where a = noise_scale.
@@ -164,7 +164,10 @@ def simulate_nonlinear_sem(W, gamma, n, sem_type, noise_scale=None):
             x = gam * np.tanh(X @ w) + z
         else:
             raise ValueError(f'SEM type {sem_type} not supported')
-        return x
+        if use_z:
+            return x, z
+        else:
+            return x
             
     d = W.shape[0]
     if noise_scale is None:
@@ -183,11 +186,87 @@ def simulate_nonlinear_sem(W, gamma, n, sem_type, noise_scale=None):
     ordered_vertices = G.topological_sorting()
     assert len(ordered_vertices) == d
     X = np.zeros([n, d])
-    for j in ordered_vertices:
-        parents = G.neighbors(j, mode=ig.IN)
-        X[:, j] = _simulate_single_equation(X[:, parents], gamma[j], W[parents, j], scale_vec[j])
-    return X
+    if use_z:
+        Z = []
+        for j in ordered_vertices:
+            parents = G.neighbors(j, mode=ig.IN)
+            x, z = _simulate_single_equation(X[:, parents], gamma[j], W[parents, j], scale_vec[j])
+            X[:, j] = x
+            Z.append(z)
+        return X, Z
+    else:
+        for j in ordered_vertices:
+            parents = G.neighbors(j, mode=ig.IN)
+            x = _simulate_single_equation(X[:, parents], gamma[j], W[parents, j], scale_vec[j])
+            X[:, j] = x
+        return X
+        
 
+def simulate_nonlinear_sem_with_intervention(W, gamma, int_idx, int_val, n, sem_type, noise_scale=None):
+    
+    def _simulate_single_equation(X, gam, w, scale):
+        if sem_type == 'tanh':
+            z = np.random.normal(scale=scale, size=n)
+            x = gam * np.tanh(X @ w) + z
+        else:
+            raise ValueError(f'SEM type {sem_type} not supported')
+        
+        return x
+    
+    d = W.shape[0]
+    if noise_scale is None:
+        scale_vec = np.ones(d)
+    elif np.isscalar(noise_scale):
+        scale_vec = noise_scale * np.ones(d)
+    else:
+        if len(noise_scale) != d:
+            raise ValueError('noise scale must be a scalar or has length d')
+        scale_vec = noise_scale
+        
+    if not is_dag(W):
+        raise ValueError('W must be a DAG')
+    
+    G = ig.Graph.Weighted_Adjacency(W.tolist())
+    ordered_vertices = G.topological_sorting()
+    assert len(ordered_vertices) == d
+    
+    X = np.zeros([n, d])
+    for j in ordered_vertices:
+        if j in int_idx:
+            X[:, j] = int_val[int_idx.index(j)]
+        else:
+            parents = G.neighbors(j, mode=ig.IN)
+            X[:, j] = _simulate_single_equation(X[:, parents], gamma[j], W[parents, j], scale_vec[j])
+            
+    return X
+    
+def simulate_nonlinear_sem_with_counterfactual(Z_obs, W, gamma, cf_idx, cf_val, n, sem_type):
+    
+    def _simulate_single_equation(z, X, gam, w):
+        if sem_type == 'tanh':
+            x = gam * np.tanh(X @ w) + z
+        else:
+            raise ValueError(f'SEM type {sem_type} not supported')
+    
+        return x
+    
+    d = W.shape[0]
+    
+    G = ig.Graph.Weighted_Adjacency(W.tolist())
+    ordered_vertices = G.topological_sorting()
+    assert len(ordered_vertices) == d
+    
+    X_cf = np.zeros([n, d])
+    for j in ordered_vertices:
+        if j in cf_idx:
+            X_cf[:, j] = cf_val[cf_idx.index(j)]
+        else:
+            parents = G.neighbors(j, mode=ig.IN)
+            X_cf[:, j] = _simulate_single_equation(Z_obs[j], X_cf[:, parents], gamma[j], W[parents, j])
+            
+    return X_cf
+    
+    
 def tanh_sem_jacobian(gamma, W):
     """
     Calculate the true weight matrix for the tanh SEM model.

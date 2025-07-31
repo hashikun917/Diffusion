@@ -19,6 +19,7 @@ carefl:
   nh: 100
   prior_dist: 'normal'
   scale_shift_base: false
+  inverse_model: true
 
 training:
   epochs: 200
