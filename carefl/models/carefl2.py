@@ -1,12 +1,10 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.distributions import MultivariateNormal
 import igraph as ig
-from notears.linear import notears_linear
-from notears.utils import simulate_dag, simulate_parameter, simulate_linear_sem, simulate_nonlinear_sem, tanh_sem_jacobian, is_dag
+from notears.utils import is_dag
 from tqdm.auto import tqdm
 from carefl.nflib.flows import DAGAffineCL, NormalizingFlowModel
 from carefl.nflib.nets import MLP4
@@ -14,54 +12,31 @@ from carefl.data.generate_synth_data import CustomSyntheticDataset
 
 
 class CAREFL:
+    """
+    CusalPiplineのyaml用CAREFL
+    """
     def __init__(self, config):
         self.config = config
-        self.meta_data = self.config.meta_data
+        self.meta_data = self.config.image_data.meta_data
         self.notears = self.config.notears
         self.carefl = self.config.carefl
-        self.training = self.config.training
+        self.training = self.config.carefl_training
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         self.flow = None
 
 
-    def _simulate_sem(self):
-        
-        d = self.meta_data.d
-        n = self.meta_data.n_samples
-        s0 = self.meta_data.s0
-        graph_type = self.meta_data.graph_type
-        
-        
-        if self.meta_data.causal_mech == 'linear':
-            self.B_true = simulate_dag(d, s0, graph_type)
-            self.W = simulate_parameter(self.B_true)
-            X = simulate_linear_sem(self.W, n, self.meta_data.noise_dist)
-        else:
-            if self.meta_data.gam_scale is None:
-                raise ValueError('gamma scale must be specified for nonlinear SEM')
-            gamma = np.ones(d) * self.meta_data.gam_scale
-            self.B_true = simulate_dag(d, s0, graph_type)
-            W_ = simulate_parameter(self.B_true)
-            self.W = tanh_sem_jacobian(gamma, W_)
-            X = simulate_nonlinear_sem(W_, gamma, n, self.meta_data.causal_mech)
-
-        return X
-
-
     def _get_datasets(self, X):
-
-        dset = CustomSyntheticDataset(X.astype(np.float32), self.device)
+        
+        if isinstance(X, torch.Tensor):
+            dset = CustomSyntheticDataset(X, self.device)
+        elif isinstance(X, np.ndarray):
+            dset = CustomSyntheticDataset(X.astype(np.float32), self.device)
+        else:
+            raise ValueError("X must be a torch.Tensor or np.ndarray")
         
         return dset
     
-    def _notears_linear(self, X):
-        
-        W_est = notears_linear(X, self.notears.lambda1, 'l2', w_threshold=self.notears.w_threshold)
-        B_est = (W_est != 0).astype(np.int32)
-        if not is_dag(B_est):
-            raise ValueError('B_est should be a DAG')
-        return B_est
     
     def predict_intervention(self, int_idx, int_val, n_samples=100):
     
@@ -84,7 +59,7 @@ class CAREFL:
             else:
                 z, _ = affine.backward(z)
                 
-        return z.detach().cpu().numpy()
+        return z
     
         
     def predict_counterfactual(self, x_obs, cf_idx, cf_val):
@@ -102,7 +77,7 @@ class CAREFL:
         flows = self.flow.flow.flows
         
         # Abduction: 観測変数に対応する潜在変数を推定
-        x_obs = torch.from_numpy(x_obs.astype(np.float32)).to(device)
+        # x_obs = torch.from_numpy(x_obs.astype(np.float32)).to(device)
         z = self.flow.forward(x_obs)[0][-1]
         
         # Action & Prediction: 介入による因果モデルの変更と観測に対応する潜在変数を用いた推論
@@ -113,10 +88,11 @@ class CAREFL:
             else:
                 z, _ = affine.backward(z)
         
-        return z.detach().cpu().numpy()
+        return z
 
 
-    def _get_flow_arch(self):
+    def _get_flow_arch(self, B_est):
+        
         
         d = self.meta_data.d
         
@@ -130,16 +106,12 @@ class CAREFL:
         else:
             raise ValueError(f'Net class {self.carefl.net_class} not supported')
         
-        if self.config.notears.use_notears:
-            self.B_est = self._notears_linear(self.X)
-            G = ig.Graph.Adjacency(self.B_est.tolist(), mode='directed')
-        else:
-            G = ig.Graph.Adjacency(self.B_true.tolist(), mode='directed')
+        assert is_dag(B_est)
+        G = ig.Graph.Adjacency(B_est.tolist(), mode='directed')
         
         ordered_vertices = G.topological_sorting()
         flow_list = []
         for v in ordered_vertices[::-1]:
-        #for v in ordered_vertices:
             cond_idx = G.neighbors(v, mode=ig.IN)
             affine = DAGAffineCL(d, cond_idx, [v], net_class, self.carefl.nh, self.carefl.scale_shift_base, self.carefl.inverse_model)
             flow_list.append(affine)
@@ -148,24 +120,19 @@ class CAREFL:
         
         return flow
             
-
-    def _train(self, X=None):
+    
+    def _train(self, X, B_est):
         
-        # 正直self.Xとするのは気持ち悪い。入力にしたい
-        if X is None:
-            self.X = self._simulate_sem()
-        else:
-            self.X = X
-        dset = self._get_datasets(self.X)
-        train_loader = DataLoader(dset, shuffle=True, batch_size=self.training.batch_size)
+        dset = self._get_datasets(X)
+        train_loader = DataLoader(dset, shuffle=True, batch_size=self.config.carefl_training.batch_size)
 
-        flow = self._get_flow_arch()
+        flow = self._get_flow_arch(B_est)
         flow.train()
         
         optimizer = optim.Adam(flow.parameters(), lr=1e-3)
         
         loss_vals = []
-        for e in tqdm(range(self.training.epochs)):
+        for e in tqdm(range(self.config.carefl_training.epochs)):
             loss_val = 0.0
             for _, x in enumerate(train_loader):
                 x = x.to(self.device)
@@ -181,7 +148,8 @@ class CAREFL:
             
         self.flow = flow
         return flow, loss_vals
-    
+        
+        
         
     def _forward_flow(self, data):
         if self.flow is None:

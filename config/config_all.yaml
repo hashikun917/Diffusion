@@ -1,0 +1,42 @@
+image_data:
+  name: 'Morpho-MNIST'
+  image_size: 32
+  use_minmax_scale: false
+  meta_data:
+    d: 2
+
+
+diffusion:
+  noise_schedule: 'linear'
+  timesteps: 500
+  unet:
+    ch_mul: [1,2,4]
+    num_res_blocks: 1
+    num_groups: 16
+    droprate: 0.0
+    cond_type: 'add'
+    use_attn: false
+  cfg:
+    uncond_rate: 0.1
+
+diffusion_training:
+  epochs: 100
+  batch_size: 64
+  optim:
+    type: 'Adam'
+
+notears:
+  lambda1: 0.1
+  w_threshold: 0.3
+
+carefl:
+  net_class: 'mlp4'
+  nh: 100
+  prior_dist: 'normal'
+  scale_shift_base: false
+  inverse_model: true
+
+carefl_training:
+  epochs: 10
+  batch_size: 128
+
