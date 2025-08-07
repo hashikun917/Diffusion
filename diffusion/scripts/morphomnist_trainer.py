@@ -91,7 +91,8 @@ class Trainer:
           images = resize_images(images, (32, 32))
         intensity = batch['intensity'][:, None].float() # (batch, ) to (batch, 1)
         thickness = batch['thickness'][:, None].float()
-        metrics = torch.cat([intensity, thickness], dim=1).to(self.device)
+        # 2025/08/07 thickness, intensityの順序に入れ替えておく
+        metrics = torch.cat([thickness, intensity], dim=1).to(self.device)
         if self.use_minmax_scale:
           metrics = scale_conditions(metrics, ['intensity', 'thickness'], self.cond_stats)
         # 一定確率で条件情報をドロップアウト

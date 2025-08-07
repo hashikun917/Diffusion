@@ -51,8 +51,7 @@ class CausalPipeline:
         print("Intervening and generating samples")
         
         x_intervened = self.carefl.predict_intervention(int_idx, int_val, n_samples=num_samples)
-        x_intervened = torch.from_numpy(x_intervened).to(self.device)
-        
+    
         utils = DiffusionUtils(timesteps=self.config.diffusion.timesteps)
         imgs = utils.ddim_p_sample_loop(self.denoise_model, 0.0, 1, x_intervened, w, self.config.image_data.image_size, num_samples, channels=1)
           
