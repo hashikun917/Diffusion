@@ -1,0 +1,33 @@
+n_nodes,use_notears,case,model,neg_log_likelihood_per_dim
+10,True,linear,true model,1.4210199525768004
+10,True,linear,carefl,1.4496811856783083
+10,True,tanh,true model,1.4160730232934895
+10,True,tanh,carefl,1.5672720539747398
+10,False,linear,true model,1.4174467838007274
+10,False,linear,carefl,1.4298652290241565
+10,False,tanh,true model,1.4170674344145435
+10,False,tanh,carefl,1.4150913063748618
+20,True,linear,true model,1.4238901851168304
+20,True,linear,carefl,1.4755434251244437
+20,True,tanh,true model,1.4066622496529118
+20,True,tanh,carefl,1.7762307502098484
+20,False,linear,true model,1.4208672864677407
+20,False,linear,carefl,1.4459489720512448
+20,False,tanh,true model,1.4198228824350956
+20,False,tanh,carefl,1.4115793142846975
+50,True,linear,true model,1.4191815198615785
+50,True,linear,carefl,1.4388102484731815
+50,True,tanh,true model,1.4221544924119587
+50,True,tanh,carefl,1.9341201517091928
+50,False,linear,true model,1.4164740888161362
+50,False,linear,carefl,1.4094597349855456
+50,False,tanh,true model,1.4205583027640065
+50,False,tanh,carefl,1.4194296621196867
+100,True,linear,true model,1.422968142675504
+100,True,linear,carefl,1.420690330939134
+100,True,tanh,true model,1.417373846822677
+100,True,tanh,carefl,1.983750175031801
+100,False,linear,true model,1.4173980434883464
+100,False,linear,carefl,1.422675843159685
+100,False,tanh,true model,1.419976247622615
+100,False,tanh,carefl,1.414578639765449
