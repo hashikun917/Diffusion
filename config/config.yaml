@@ -1,8 +1,8 @@
 image_data: 'Morpho-MNIST'
 
 meta_data:
-  causal_mech: 'tanh'
-  n_samples: 1024
+  causal_mech: 'linear'
+  n_samples: 4096
   d: 3
   s0: 3
   graph_type: 'ER'
@@ -10,7 +10,7 @@ meta_data:
   noise_dist: 'gauss'
 
 notears:
-  use_notears: false
+  use_notears: true
   lambda1: 0.1
   w_threshold: 0.3
 
