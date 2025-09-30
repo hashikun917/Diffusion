@@ -27,6 +27,7 @@ class Trainer:
     self.cond_stats = load_json(cond_stats_path)
     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     self.image_size = self.config['image_size']
+    self.deepscm_model = self.config['deepscm_model']
     self.epochs = self.config['epochs']
     self.batch_size = self.config['batch_size']
     self.timesteps = self.config['timesteps']
@@ -50,7 +51,11 @@ class Trainer:
     self.plot_interval = self.config.get('plot_interval', 10)
 
     # Prepare dataset and dataloader
-    dataset = MorphoMNISTLike(root_dir=self.dataset_path, columns=['intensity', 'thickness'], train=True)
+    if self.deepscm_model == "thickness and intensity":
+      columns = ['thickness', 'intensity']
+    elif self.deepscm_model == "full model":
+      columns = ['thickness', 'intensity', 'slant', 'width']
+    dataset = MorphoMNISTLike(root_dir=self.dataset_path, columns=columns, train=True)
     self.trainloader = DataLoader(dataset, self.batch_size, shuffle=True)
     
     # Model, optimizer, and scheduler setup
@@ -89,12 +94,26 @@ class Trainer:
         images = batch['image'].unsqueeze(1).to(self.device).float() / 255.0 # チャネルを追加してデータの正規化
         if self.image_size != images.shape[2]:
           images = resize_images(images, (32, 32))
-        intensity = batch['intensity'][:, None].float() # (batch, ) to (batch, 1)
-        thickness = batch['thickness'][:, None].float()
-        # 2025/08/07 thickness, intensityの順序に入れ替えておく
-        metrics = torch.cat([thickness, intensity], dim=1).to(self.device)
-        if self.use_minmax_scale:
-          metrics = scale_conditions(metrics, ['intensity', 'thickness'], self.cond_stats)
+          
+        if self.deepscm_model == "thickness and intensity":
+          intensity = batch['intensity'][:, None].float() # (batch, ) to (batch, 1)
+          thickness = batch['thickness'][:, None].float()
+          # 2025/08/07 thickness, intensityの順序に入れ替えておく
+          metrics = torch.cat([thickness, intensity], dim=1).to(self.device)
+          if self.use_minmax_scale:
+            metrics = scale_conditions(metrics, ['intensity', 'thickness'], self.cond_stats)
+            
+        elif self.deepscm_model == "full model":
+          thickness = batch['thickness'][:, None].float()
+          intensity = batch['intensity'][:, None].float()
+          slant = batch['slant'][:, None].float()
+          width = batch['width'][:, None].float()
+          
+          metrics = torch.cat([thickness, intensity, slant, width], dim=1).to(self.device)
+          if self.use_minmax_scale:
+            # 使う場合はslant, widthの統計量をcond_statsに保存せよ
+            metrics = scale_conditions(metrics, ['thickness', 'intensity', 'slant', 'width'], self.cond_stats)
+          
         # 一定確率で条件情報をドロップアウト
         drop_mask = (torch.rand(metrics.shape[0], 1, device=self.device) < self.uncond_rate).float()  # shape: (B, 1)
         metrics = metrics * (1.0 - drop_mask)  # 値を0にする
@@ -121,7 +140,7 @@ class Trainer:
       if (e + 1) % self.plot_interval == 0:
         plot_start_time = time.time()
         # 条件付きDDIM生成によるプロット
-        conditional_ddim_plot_samples(self.denoise_model, eta=0.0, interval=1, cond=metrics[:5], w=self.guidance_scale, batch_size=5, image_size=32, timesteps=self.timesteps)
+        conditional_ddim_plot_samples(self.denoise_model, eta=0.0, interval=1, cond=metrics[:5], w=self.guidance_scale, batch_size=5, image_size=self.image_size, timesteps=self.timesteps)
         if not os.path.exists(result_dir + '/samples'):
           os.mkdir(result_dir + '/samples')
         plt.savefig(result_dir + f'/samples/epoch{e + 1}.png')

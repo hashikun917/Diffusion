@@ -134,11 +134,14 @@ def train_carefl(X, B):
 def nll_score_with_various_cases(W_true, use_notears, case, model):
     # 真の分布の logpdf
     d = W_true.shape[0]
+    n_eval = 200
     if case == 'linear':
         X = simulate_linear_sem(W_true, n, sem_type='gauss')
         logpdf_fn, _ = build_sem_logpdf(W_true, gamma=None, sem_type="linear", noise_scale=1.0)
         if model == 'true model':
-            ll = logpdf_fn(X)
+            idx = np.random.choice(X.shape[0], size=n_eval, replace=False)
+            X_eval = X[idx]
+            ll = logpdf_fn(X_eval)
             nll = -ll.mean() / d
             return nll
     elif case == 'tanh':
@@ -146,7 +149,9 @@ def nll_score_with_various_cases(W_true, use_notears, case, model):
         X = simulate_nonlinear_sem(W_true, gamma, n, sem_type='tanh')
         logpdf_fn, _ = build_sem_logpdf(W_true, gamma=gamma, sem_type="tanh", noise_scale=1.0)
         if model == 'true model':
-            ll = logpdf_fn(X)
+            idx = np.random.choice(X.shape[0], size=n_eval, replace=False)
+            X_eval = X[idx]
+            ll = logpdf_fn(X_eval)
             nll = -ll.mean() / d
             return nll
     else:
@@ -161,7 +166,7 @@ def nll_score_with_various_cases(W_true, use_notears, case, model):
 
     # CAREFL 学習 → 生成 → 真の分布で評価
     flow = train_carefl(X, B)
-    X_gen = flow.sample(n)[-1].detach().cpu().numpy()
+    X_gen = flow.sample(n_eval)[-1].detach().cpu().numpy()
     ll_gen = logpdf_fn(X_gen)
     nll_gen = -ll_gen.mean() / d
     return nll_gen

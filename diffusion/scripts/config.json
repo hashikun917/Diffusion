@@ -1,9 +1,10 @@
 {
     "epochs": 100,
     "image_size": 28, 
+    "deepscm_model": "full model",
     "batch_size": 64,
     "timesteps": 500,
-    "dataset_path": "/home/hashikami/datadrive/MorphoMNIST",
+    "dataset_path": "/home/hashikami/datadrive/morphomnist_all_model",
     "use_minmax_scale": false,
     "model_path": "/home/hashikami/projects/Diff/diffusion/diffusion_model/models/model11.py",
     "model_name": "UNet",

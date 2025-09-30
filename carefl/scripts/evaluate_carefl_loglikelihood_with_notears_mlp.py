@@ -166,6 +166,7 @@ def eval_one_setting(
     w_threshold: float,
     nh: int,
     num_expansion: int,
+    n_eval: int = 200,
     seed: int = 0,
 ) -> Tuple[float, float]:
     """
@@ -186,7 +187,9 @@ def eval_one_setting(
     d_float = float(d)
 
     # baseline: true model
-    nll_true = -logpdf_fn(X).mean() / d_float
+    idx = np.random.choice(X.shape[0], size=n_eval, replace=False)
+    X_eval = X[idx]
+    nll_true = -logpdf_fn(X_eval).mean() / d_float
 
     # notears_type に応じて B を準備
     if notears_type == "unused":
@@ -196,7 +199,7 @@ def eval_one_setting(
 
     # CAREFL 学習→生成→NLL
     flow = train_carefl(X, B_use)
-    X_gen = flow.sample(n)[-1].detach().cpu().numpy()
+    X_gen = flow.sample(n_eval)[-1].detach().cpu().numpy()
     nll_carefl = -logpdf_fn(X_gen).mean() / d_float
 
     return nll_true if notears_type == "unused" else None, nll_carefl
@@ -207,7 +210,7 @@ def eval_one_setting(
 # =========================
 def parse_args():
     p = argparse.ArgumentParser(description="Evaluate CAREFL NLL (tanh) with notears variants")
-    p.add_argument("--n", type=int, default=1024, help="訓練/生成に用いるサンプル数")
+    p.add_argument("--n", type=int, default=1024, help="訓練に用いるサンプル数")
     p.add_argument("--gamma_scale", type=float, default=3.0, help="tanh のスケール γ")
     p.add_argument("--s0_scale", type=float, default=2.0, help="平均エッジ数のスケール（s0 = s0_scale * d）")
 
