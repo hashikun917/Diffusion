@@ -9,7 +9,17 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+import torch.nn.functional as F
+import torchvision.transforms as transforms
 
+
+MIN_MAX = {
+    "thickness": [0.82152224, 6.384839],
+    "intensity": [66.48045, 254.93214],
+    "slant": [-43.692436, 66.94711],
+    "width": [10.000215, 24.999382],
+    "image": [0.0, 255.0]
+}
 
 def _load_uint8(f):
     idx_dtype, ndim = struct.unpack('BBBB', f.read(4))[2:]
@@ -74,6 +84,24 @@ def load_morphomnist_like(root_dir, train: bool = True, columns=None) \
     return images, labels, metrics
 
 
+def normalize(data):
+    normalized = {}
+    for k, v in MIN_MAX.items():
+        value = data.images if k == "image" else data.metrics[k]
+        # [min,max] -> [0,1]
+        normalized[k] = (value - v[0]) / (v[1] - v[0])
+        # [0,1] -> [-1,1]
+        normalized[k] = 2 * normalized[k] - 1
+
+    return normalized["image"], normalized["thickness"], normalized["intensity"], normalized["slant"], normalized["width"]
+
+def unnormalize(value, name):
+    # [-1,1] -> [0,1]
+    value = (value + 1) / 2
+    # [0,1] -> [min,max]
+    value = (value * (MIN_MAX[name][1] - MIN_MAX[name][0])) +  MIN_MAX[name][0]
+    return value
+
 class MorphoMNISTLike(Dataset):
     def __init__(self, root_dir, train: bool = True, columns=None):
         """
@@ -103,3 +131,57 @@ class MorphoMNISTLike(Dataset):
         item['image'] = self.images[idx]
         item['label'] = self.labels[idx]
         return item
+    
+
+class MorphoMNISTLikeForClassifier(Dataset):
+    def __init__(self, attribute_size, split='train', normalize_=True, transform=None, data_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'data')):
+        self.has_valid_set = False
+        self.root_dir = data_dir
+        self.train = True if split == 'train' else False
+        self.transform = transform
+        # self.pad = transforms.Pad(padding=2)
+
+        # digit is loaded from labels
+        columns = [att for att in attribute_size.keys() if att != 'digit']
+
+        images, labels, metrics_df = load_morphomnist_like(data_dir, self.train, columns)
+
+        self.images = torch.as_tensor(images.copy(), dtype=torch.float32)
+        # self.images = self.pad(torch.as_tensor(images.copy(), dtype=torch.float32))
+        self.labels = F.one_hot(torch.as_tensor(labels.copy(), dtype=torch.long), num_classes=10)
+
+        if columns is None:
+            columns = metrics_df.columns
+        self.metrics = {col: torch.as_tensor(metrics_df[col], dtype=torch.float32) for col in columns}
+        self.columns = columns
+        assert len(self.images) == len(self.labels) and len(self.images) == len(metrics_df)
+        if normalize_:
+            self.images, self.metrics['thickness'], self.metrics['intensity'], self.metrics['slant'], self.metrics['width'] = normalize(self)
+
+        if "digit" in attribute_size.keys():
+            self.metrics["digit"] = self.labels
+
+        self.attrs = torch.cat([self.metrics[attr].unsqueeze(1) if attr != "digit" else self.metrics[attr]
+                                for attr in attribute_size.keys()], dim=1)
+
+        ### 以下の部分は何に使うのか不明 ###
+        # self.possible_values = {attr: torch.unique(values, dim=0) for attr, values in self.metrics.items()}
+
+        # bins = np.linspace(-1, 1, 10)
+        # self.bins = {}
+        # for attr, values in self.metrics.items():
+        #     if attr != "digit":
+        #         data = values.numpy()
+        #         digitized = np.digitize(data, bins)
+        #         self.bins[attr] = [data[digitized == i].mean() for i in range(1, len(bins))]
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        item = {col: values[idx] for col, values in self.metrics.items()}
+        item['image'] = self.images[idx].unsqueeze(0)
+        item['attrs'] = self.attrs[idx]
+        if self.transform:
+            return self.transform(item["image"], item['attrs'])
+        return item['image'], item['attrs']

@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import importlib
 import json
+import numpy as np
 
 def load_json(json_path: str) -> dict:
   with open(json_path, "r") as f:
@@ -50,3 +51,18 @@ def resize_images(images, new_size):
   # Resize the images
   resized_images = F.interpolate(images, size=new_size, mode='bilinear', align_corners=False)
   return resized_images
+
+def scale_image_0_1_to_0_255(image):
+    """
+    画像の各ピクセル値を0~1スケールから0~255スケールに変換する関数
+
+    Args:
+        image (np.ndarray or torch.Tensor): 0~1スケールの画像
+
+    Returns:
+        np.ndarray or torch.Tensor: 0~255スケールの画像（同じ型で返す）
+    """
+    if isinstance(image, torch.Tensor):
+        return (image * 255).clamp(0, 255).to(torch.uint8)
+    else:
+        return np.clip(image * 255, 0, 255).astype(np.uint8)

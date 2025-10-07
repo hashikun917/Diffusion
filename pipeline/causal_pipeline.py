@@ -6,8 +6,13 @@ from pathlib import Path
 from diffusion.diffusion_model.models.model11 import UNet
 from diffusion.utils.diffusion_utils import DiffusionUtils
 from notears.linear import notears_linear
+from notears.nonlinear import NotearsMLP, NotearsSobolev
+from notears.nonlinear import notears_nonlinear
 from carefl.models.carefl2 import CAREFL
 
+from diffusion.utils.utils import load_json
+
+from diffusion.utils.utils import scale_image_0_1_to_0_255
 
 
 class CausalPipeline:
@@ -20,15 +25,20 @@ class CausalPipeline:
         
     def run_causal_discovery(self, X: np.ndarray) -> np.ndarray:
         print("Running causal discovery for meta-data")
-        W_est = notears_linear(X, self.notears.lambda1, 'l2', w_threshold=self.notears.w_threshold)
+        
+        d = X.shape[1]
+        
+        if self.notears.method == 'linear':
+            W_est = notears_linear(X, self.notears.lambda1, 'l2', w_threshold=self.notears.w_threshold)
+        elif self.notears.method == 'mlp':
+            model = NotearsMLP(dims=[d, 10, 1], bias=True)
+            W_est = notears_nonlinear(model, X, lambda1=self.notears.lambda1, lambda2=self.notears.lambda1, w_threshold=self.notears.w_threshold)
+        elif self.notears.method == 'sob':
+            model = NotearsSobolev(d, 10)
+            W_est = notears_nonlinear(model, X, lambda1=self.notears.lambda1, lambda2=self.notears.lambda1, w_threshold=self.notears.w_threshold)
+        
         B_est = (W_est != 0).astype(np.int32)
         
-        """
-        notears_dir = self.output_dir / 'notears_results'
-        notears_dir.mkdir(parents=True, exist_ok=True)
-        np.save(notears_dir / 'W_est.npy', W_est)
-        np.save(notears_dir / 'B_est.npy', B_est)
-        """
         
         return B_est
     
@@ -71,6 +81,46 @@ class CausalPipeline:
         imgs = utils.ddim_p_sample_loop(self.denoise_model, 0.0, 1, x_cf, w, self.config.image_data.image_size, images_obs.shape[0], channels=1, reverse=False, noise=noises[-1])
          
         return imgs
+    
+    def produce_counterfactuals(self, factual_batch: dict, do_parent: str, w: float=0.8):
+        
+        cond_stats = load_json(self.config.image_data.meta_data.cond_stats_path)
+        
+        utils = DiffusionUtils(timesteps=self.config.diffusion.timesteps)
+        
+        thickness = factual_batch['thickness'][:, None].float()
+        intensity = factual_batch['intensity'][:, None].float()
+        slant = factual_batch['slant'][:, None].float()
+        width = factual_batch['width'][:, None].float()
+        x_obs = torch.cat([thickness, intensity, slant, width], dim=1).to(self.device)
+        images_obs = factual_batch['image'].unsqueeze(1).to(self.device).float() / 255.0 
+        
+        cf_idx = [list(factual_batch.keys()).index(do_parent) for _ in range(factual_batch['image'].shape[0])]
+        min = float(cond_stats[do_parent]['min'])
+        max = float(cond_stats[do_parent]['max'])
+        cf_val = np.random.uniform(min, max, size=factual_batch['image'].shape[0]).tolist()
+
+        # todo: 将来的にはここでoursとcausal vaeを選択できるようにする
+        # if model == 'ours':
+        noises = utils.ddim_p_sample_loop(self.denoise_model, 0.0, 1, x_obs, w, factual_batch['image'].shape[2], images_obs.shape[0], channels=1, reverse=True, input_img=images_obs)
+        x_cf = self.carefl.predict_counterfactual(x_obs, cf_idx, cf_val)
+        temp_imgs = utils.ddim_p_sample_loop(self.denoise_model, 0.0, 1, x_cf, w, factual_batch['image'].shape[2], images_obs.shape[0], channels=1, reverse=False, noise=noises[-1])
+        cf_images = scale_image_0_1_to_0_255(temp_imgs[-1])
+        
+        counterfactual_batch = {
+        'image': cf_images,
+        'thickness': x_cf[:, 0],
+        'intensity': x_cf[:, 1],
+        'slant': x_cf[:, 2],
+        'width': x_cf[:, 3]
+        }
+            
+        # elif model == 'causal vae'
+        
+        
+        return counterfactual_batch
+    
+
         
         
         

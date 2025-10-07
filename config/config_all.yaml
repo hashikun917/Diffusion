@@ -1,9 +1,10 @@
 image_data:
   name: 'Morpho-MNIST'
-  image_size: 32
+  image_size: 28
   use_minmax_scale: false
   meta_data:
-    d: 2
+    d: 4
+    cond_stats_path: 'dataset/cond_stats.json'
 
 
 diffusion:
@@ -26,6 +27,7 @@ diffusion_training:
     type: 'Adam'
 
 notears:
+  method: 'mlp'
   lambda1: 0.1
   w_threshold: 0.3
 
