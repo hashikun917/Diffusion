@@ -1,0 +1,27 @@
+{
+    "anticausal_graph": {
+        "thickness": ["intensity", "slant", "width"],
+        "intensity": [],
+        "slant": [],
+        "width": []
+    },
+
+
+    "attribute_size": {
+        "thickness": 1,
+        "intensity": 1,
+        "slant": 1,
+        "width": 1
+    },
+
+    "dataset": "morphomnist",
+    "ckpt_path" : "/home/hashikami/checkpoint/benchmark/morphomnist/anticausal_classifier/",
+    "in_shape" : [1, 28, 28] ,
+    "patience" : 10,
+    "batch_size_train" : 256,
+    "batch_size_val" : 256,
+    "lr" : 1e-3,
+    "max_epochs" : 1000,
+    "train_val_split" : 0.8,
+    "ema": "True"
+}

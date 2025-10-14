@@ -89,6 +89,28 @@ class CAREFL:
                 z, _ = affine.backward(z)
         
         return z
+    
+    def predict_counterfactual2(self, x_obs: torch.Tensor, cf_idx: int, cf_vals: list):
+        # 一つの介入変数に複数の介入値を設定できるようにしたもの
+        # cf_idxは介入変数のインデックス
+        # cf_valsは介入変数に設定する介入値のリスト
+        
+        assert x_obs.shape[0] == len(cf_vals)
+        
+        device = self.device
+        cf_vals = torch.tensor(cf_vals).to(self.device)
+
+        
+        flows = self.flow.flow.flows
+        z = self.flow.forward(x_obs)[0][-1]
+        for affine in flows[::-1]:
+            trans_idx = affine.trans_idx[0]
+            if trans_idx == cf_idx:
+                z[:, trans_idx] = cf_vals
+            else:
+                z, _ = affine.backward(z)
+                
+        return z        
 
 
     def _get_flow_arch(self, B_est):

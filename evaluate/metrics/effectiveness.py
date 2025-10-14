@@ -30,7 +30,7 @@ def effectiveness(counterfactual_batch, unnormalize_fn, predictors, dataset):
         #            else nn.Sigmoid()(clfs(counterfactual_batch["image"])) for key , clfs in predictors.items()} #predicted values
         
         predictions = {
-            key: clfs(counterfactual_batch['image'], counterfactual_batch['intensity'], counterfactual_batch['slant'], counterfactual_batch['width'])
+            key: clfs(counterfactual_batch['image'], torch.cat([counterfactual_batch['intensity'].view(-1, 1), counterfactual_batch['slant'].view(-1, 1), counterfactual_batch['width'].view(-1, 1)], dim=1))
             if key=='thickness'
             else clfs(counterfactual_batch['image']) for key , clfs in predictors.items()
         }
@@ -40,7 +40,7 @@ def effectiveness(counterfactual_batch, unnormalize_fn, predictors, dataset):
         #       if key!="digit" else  (targets[key].argmax(-1) == predictions[key].argmax(-1)).sum().cpu().numpy() / predictions[key].shape[0]
         #       for key in targets}
         
-        result = {key: (targets[key] - predictions[key]).abs().mean().cpu().numpy() for key in targets}
+        result = {key: (unnormalize_fn(targets[key], key) - unnormalize_fn(predictions[key], key)).abs().mean().cpu().detach().numpy() for key in targets}
         # clfsの出力を[-1, 1]にする場合
         # result = {key: (targets[key] - unnormalize_fn(predictions[key])).abs().mean().cpu().numpy() for key in targets}
 

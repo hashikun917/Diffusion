@@ -6,6 +6,7 @@ authors = [{ name = "Takeshi Hashikami" }]
 readme = "README.md"
 requires-python = ">=3.8, <=3.10"
 dependencies = [
+    "joblib>=1.4.2",
     "matplotlib>=3.7.5",
     "numpy>=1.24.4",
     "pandas>=2.0.3",
