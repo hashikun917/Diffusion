@@ -61,6 +61,14 @@ MIN_MAX = {
     "image": [0.0, 255.0]
 }
 
+QUARTILE_RANGES = {
+    'thickness': [2.04805145, 2.881358275],
+    'intensity': [117.097564, 197.4233375],
+    'slant': [-19.0626455, -2.3332007],
+    'width': [11.03513725, 19.5581495]
+}
+
+
 
 def evaluate_effectiveness(test_set: Dataset, unnormalize_fn, batch_size:int , scm: Union[nn.Module, CausalPipeline], attributes: List[str], do_parent:str,
                            predictors: Dict[str, Classifier], dataset: str, intervention_source: Dataset = None, w: float=0.8):
@@ -75,7 +83,8 @@ def evaluate_effectiveness(test_set: Dataset, unnormalize_fn, batch_size:int , s
                                                   force_change=True, possible_values=test_set.possible_values, bins=test_set.bins)
         elif isinstance(scm, CausalPipeline):
             ### いずれは元々の実装のintervention_source（possible_valuesからとってくるor訓練セットからとってくる）に変えるべき ###
-            intervention_source = {atr: np.random.uniform(MIN_MAX[atr][0], MIN_MAX[atr][1], size=factual_batch['image'].shape[0]).tolist() for atr in attribute_size.keys()}
+            # intervention_source = {atr: np.random.uniform(MIN_MAX[atr][0], MIN_MAX[atr][1], size=factual_batch['image'].shape[0]).tolist() for atr in attribute_size.keys()}
+            intervention_source = {atr: np.random.uniform(QUARTILE_RANGES[atr][0], QUARTILE_RANGES[atr][1], size=factual_batch['image'].shape[0]).tolist() for atr in attribute_size.keys()}
             counterfactuals = scm.produce_counterfactuals(factual_batch, do_parent, intervention_source, w=w)
             
         e_score = effectiveness(counterfactuals, unnormalize_fn, predictors, dataset)

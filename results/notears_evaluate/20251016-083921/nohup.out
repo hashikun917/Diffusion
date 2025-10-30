@@ -1,0 +1,5 @@
+nohup: 入力を無視します
+/home/hashikami/projects/Diff/.venv/lib/python3.8/site-packages/scipy/linalg/_matfuncs.py:378: RuntimeWarning: overflow encountered in matmul
+  eAw = eAw @ eAw
+/home/hashikami/projects/Diff/.venv/lib/python3.8/site-packages/scipy/linalg/_matfuncs.py:378: RuntimeWarning: invalid value encountered in matmul
+  eAw = eAw @ eAw

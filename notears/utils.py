@@ -373,7 +373,7 @@ def tanh_sem_jacobian(gamma, W):
     """
     return np.diag(gamma) @ W
 
-def count_accuracy(B_true, B_est):
+def count_accuracy(B_true, B_est, check_dag=True):
     """Compute various accuracy metrics for B_est.
 
     true positive = predicted association exists in condition in correct direction
@@ -399,7 +399,7 @@ def count_accuracy(B_true, B_est):
     else:  # dag
         if not ((B_est == 0) | (B_est == 1)).all():
             raise ValueError('B_est should take value in {0,1}')
-        if not is_dag(B_est):
+        if check_dag and not is_dag(B_est):
             raise ValueError('B_est should be a DAG')
     d = B_true.shape[0]
     # linear index of nonzeros

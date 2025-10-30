@@ -30,6 +30,9 @@ from notears.linear import notears_linear
 from notears.nonlinear import NotearsMLP, NotearsSobolev, notears_nonlinear
 
 
+from evaluate.utils.save_results import save_params
+
+
 # =========================
 # 真の結合対数尤度ファクトリ（加法的ガウス）
 # =========================
@@ -93,7 +96,7 @@ def build_sem_logpdf(
 # =========================
 # CAREFL 学習
 # =========================
-def train_carefl(X: np.ndarray, B_bool: np.ndarray, epochs: int = 200) -> NormalizingFlowModel:
+def train_carefl(X: np.ndarray, B_bool: np.ndarray, epochs: int = 30) -> NormalizingFlowModel:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     d = X.shape[1]
 
@@ -128,7 +131,7 @@ def train_carefl(X: np.ndarray, B_bool: np.ndarray, epochs: int = 200) -> Normal
 # =========================
 # 因果探索：タイプ別推定
 # =========================
-def estimate_B(X: np.ndarray, notears_type: str, lamb: float, w_threshold: float, nh: int, num_expansion: int) -> np.ndarray:
+def estimate_B(X: np.ndarray, notears_type: str, lamb1: float, lamb2: float, w_threshold: float, nh: int, num_expansion: int) -> np.ndarray:
     """各 notears_type に基づき B(bool) を返す"""
     d = X.shape[1]
 
@@ -136,17 +139,17 @@ def estimate_B(X: np.ndarray, notears_type: str, lamb: float, w_threshold: float
         raise ValueError("estimate_B called with 'unused'. Provide true graph instead.")
 
     if notears_type == "notears-linear":
-        W_est = notears_linear(X, lamb, loss_type='l2', w_threshold=w_threshold)
+        W_est = notears_linear(X, lamb1, loss_type='l2', w_threshold=w_threshold)
         return (W_est != 0)
 
     elif notears_type == "notears-mlp":
         model = NotearsMLP(dims=[d, nh, 1], bias=True)
-        W_est = notears_nonlinear(model, X, lambda1=lamb, lambda2=lamb, w_threshold=w_threshold)
+        W_est = notears_nonlinear(model, X, lambda1=lamb2, lambda2=lamb2, w_threshold=w_threshold)
         return (W_est != 0)
 
     elif notears_type == "notears-sob":
         model = NotearsSobolev(d, num_expansion)
-        W_est = notears_nonlinear(model, X, lambda1=lamb, lambda2=lamb, w_threshold=w_threshold)
+        W_est = notears_nonlinear(model, X, lambda1=lamb2, lambda2=lamb2, w_threshold=w_threshold)
         return (W_est != 0)
 
     else:
@@ -162,7 +165,8 @@ def eval_one_setting(
     s0_scale: float,
     gamma_scale: float,
     notears_type: str,
-    lamb: float,
+    lamb1: float,
+    lamb2: float,
     w_threshold: float,
     nh: int,
     num_expansion: int,
@@ -195,7 +199,7 @@ def eval_one_setting(
     if notears_type == "unused":
         B_use = B_true
     else:
-        B_use = estimate_B(X, notears_type, lamb=lamb, w_threshold=w_threshold, nh=nh, num_expansion=num_expansion)
+        B_use = estimate_B(X, notears_type, lamb1, lamb2, w_threshold=w_threshold, nh=nh, num_expansion=num_expansion)
 
     # CAREFL 学習→生成→NLL
     flow = train_carefl(X, B_use)
@@ -210,17 +214,18 @@ def eval_one_setting(
 # =========================
 def parse_args():
     p = argparse.ArgumentParser(description="Evaluate CAREFL NLL (tanh) with notears variants")
-    p.add_argument("--n", type=int, default=1024, help="訓練に用いるサンプル数")
+    p.add_argument("--n-eval", type=int, default=200, help="評価に用いるサンプル数")
     p.add_argument("--gamma_scale", type=float, default=3.0, help="tanh のスケール γ")
     p.add_argument("--s0_scale", type=float, default=2.0, help="平均エッジ数のスケール（s0 = s0_scale * d）")
 
-    p.add_argument("--lambda_", dest="lambda_", type=float, default=0.01, help="notears-mlp/sob の正則化係数（lambda1=lambda2=lambda_）")
+    p.add_argument("--lambda1", type=float, default=0.1, help="notears-linear の正則化係数")
+    p.add_argument("--lambda2", type=float, default=0.01, help="notears-mlp/sob の正則化係数")
     p.add_argument("--w_threshold", type=float, default=0.3, help="notears-mlp/sob の閾値")
     p.add_argument("--nh", type=int, default=10, help="notears-mlp の中間層ユニット数")
     p.add_argument("--num_expansion", type=int, default=10, help="notears-sob の展開次数")
 
     p.add_argument("--out_dir", type=str, default="results/carefl_evaluate", help="CSV出力先ディレクトリ")
-    p.add_argument("--seeds", type=int, nargs="+", default=[0], help="乱数シード（必要なら複数）")
+    p.add_argument("--n-seeds", type=int, default=10, help="乱数シード数")
     return p.parse_args()
 
 
@@ -231,70 +236,75 @@ def main():
     torch.set_default_dtype(torch.double)
     
     args = parse_args()
-    out_dir = Path(args.out_dir)
+    now = datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir = Path(args.out_dir) / now
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    n_trains = [1000, 5000]
+    n_eval = args.n_eval
     nodes_list = [10, 20, 50, 100]
     notears_types = ["unused", "notears-linear", "notears-mlp", "notears-sob"]
 
     rows = []
     for d in nodes_list:
-        for seed in args.seeds:
-            # ベースライン（true model）は notears_type='unused' のときだけ記録
-            nll_true, _ = eval_one_setting(
-                d=d, n=args.n, s0_scale=args.s0_scale, gamma_scale=args.gamma_scale,
-                notears_type="unused", lamb=args.lambda_, w_threshold=args.w_threshold,
-                nh=args.nh, num_expansion=args.num_expansion, seed=seed,
-            )
-            rows.append({
-                "n_nodes": d,
-                "notears_type": "unused",
-                "model": "true model",
-                "neg_log_likelihood_per_dim": float(nll_true),
-                "n": args.n,
-                "gamma_scale": args.gamma_scale,
-                "s0_scale": args.s0_scale,
-                "lambda": args.lambda_,
-                "w_threshold": args.w_threshold,
-                "nh": args.nh,
-                "num_expansion": args.num_expansion,
-                "seed": seed,
-            })
-
-            # CAREFL（因果探索の違いで比較）
+        for n_train in n_trains:
             for nt in notears_types:
-                nll_true_tmp, nll_carefl = eval_one_setting(
-                    d=d, n=args.n, s0_scale=args.s0_scale, gamma_scale=args.gamma_scale,
-                    notears_type=nt, lamb=args.lambda_, w_threshold=args.w_threshold,
-                    nh=args.nh, num_expansion=args.num_expansion, seed=seed,
-                )
+            
+                neg_like_true_model = []
+                neg_like_carefl = []
+                for seed in range(args.n_seeds):
+                    
+                    if nt == "unused":
+                        nll_true, nll_carefl = eval_one_setting(
+                            d=d, n=n_train, s0_scale=args.s0_scale, gamma_scale=args.gamma_scale,
+                            notears_type=nt, lamb1=args.lambda1, lamb2=args.lambda2, w_threshold=args.w_threshold,
+                            nh=args.nh, num_expansion=args.num_expansion, n_eval=n_eval, seed=seed,
+                        )
+                        neg_like_true_model.append(nll_true)
+                        neg_like_carefl.append(nll_carefl)
+                        
+                    else:
+                        _, nll_carefl = eval_one_setting(
+                            d=d, n=n_train, s0_scale=args.s0_scale, gamma_scale=args.gamma_scale,
+                            notears_type=nt, lamb1=args.lambda1, lamb2=args.lambda2, w_threshold=args.w_threshold,
+                            nh=args.nh, num_expansion=args.num_expansion, n_eval=n_eval, seed=seed,
+                        )
+                        neg_like_carefl.append(nll_carefl)
+                
+                if nt == "unused":
+                    rows.append({
+                        "n_nodes": d,
+                        "n_train": n_train,
+                        "notears_type": None,
+                        "model": "true model",
+                        "neg_log_likelihood_per_dim": np.mean(neg_like_true_model),
+                    })
+                
                 rows.append({
                     "n_nodes": d,
+                    "n_train": n_train,
                     "notears_type": nt,
                     "model": "carefl",
-                    "neg_log_likelihood_per_dim": float(nll_carefl),
-                    "n": args.n,
-                    "gamma_scale": args.gamma_scale,
-                    "s0_scale": args.s0_scale,
-                    "lambda": args.lambda_,
-                    "w_threshold": args.w_threshold,
-                    "nh": args.nh,
-                    "num_expansion": args.num_expansion,
-                    "seed": seed,
+                    "neg_log_likelihood_per_dim": np.mean(neg_like_carefl),
                 })
-
+            
     df = pd.DataFrame(rows)
 
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    fname = (
-        f"carefl_eval_tanh_n{args.n}_gamma{args.gamma_scale}_s0{args.s0_scale}"
-        f"_lam{args.lambda_}_thr{args.w_threshold}_nh{args.nh}_sob{args.num_expansion}_{ts}.csv"
-    )
-    out_path = Path(args.out_dir) / fname
+    out_path = out_dir / "carefl_eval.csv"
     df.to_csv(out_path, index=False)
-
-    print(f"Saved CSV: {out_path}")
-    print(df.head())
+    
+    params = {
+        "n_eval": args.n_eval,
+        "gamma_scale": args.gamma_scale,
+        "s0_scale": args.s0_scale,
+        "lambda1": args.lambda1,
+        "lambda2": args.lambda2,
+        "w_threshold": args.w_threshold,
+        "nh": args.nh,
+        "num_expansion": args.num_expansion,
+        "n_seeds": args.n_seeds,
+    }
+    save_params(params, out_dir)
 
 
 if __name__ == "__main__":

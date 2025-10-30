@@ -30,7 +30,7 @@ diffusion_training:
 
 notears:
   method: 'mlp'
-  lambda1: 0.1
+  lambda1: 0.01
   w_threshold: 0.3
 
 carefl:

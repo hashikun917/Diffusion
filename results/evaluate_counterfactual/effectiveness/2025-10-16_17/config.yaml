@@ -1,0 +1,44 @@
+carefl:
+  inverse_model: true
+  net_class: mlp4
+  nh: 100
+  prior_dist: normal
+  scale_shift_base: true
+carefl_training:
+  batch_size: 128
+  epochs: 30
+diffusion:
+  cfg:
+    uncond_rate: 0.1
+  checkpoint_path: /home/hashikami/checkpoint/checkpoint_2025-09-30_15.pth
+  noise_schedule: linear
+  timesteps: 500
+  unet:
+    ch_mul:
+    - 1
+    - 2
+    - 4
+    cond_type: add
+    droprate: 0.0
+    num_groups: 16
+    num_res_blocks: 1
+    use_attn: false
+diffusion_training:
+  batch_size: 64
+  epochs: 100
+  optim:
+    type: Adam
+evaluate:
+  batch_size: 128
+image_data:
+  image_size: 28
+  meta_data:
+    causalgraph_path: dataset/B_true.npy
+    cond_stats_path: dataset/cond_stats.json
+    d: 4
+  name: morphomnist
+  use_minmax_scale: false
+notears:
+  lambda1: 0.01
+  method: mlp
+  w_threshold: 0.3

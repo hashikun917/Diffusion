@@ -1,0 +1,1 @@
+{"graph_type": "ER", "s0_scale": 2.0, "gamma_scale": 3.0, "lambda1": 0.1, "lambda2": 0.01, "nh": 10, "num_expansion": 10, "w_threshold": 0.3, "n_seeds": 10}
