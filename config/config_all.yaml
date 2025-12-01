@@ -1,11 +1,13 @@
 image_data:
   name: 'morphomnist'
+  data_dir: '/home/hashikami/datadrive/morphomnist_all_model'
   image_size: 28
   use_minmax_scale: false
   meta_data:
     d: 4
     cond_stats_path: 'dataset/cond_stats.json'
     causalgraph_path: 'dataset/B_true.npy'
+    attribute_size_path: 'dataset/attribute_size.json'
     graph_path: 'dataset/causal_graph.json'
 
 
@@ -13,6 +15,7 @@ diffusion:
   noise_schedule: 'linear'
   timesteps: 500
   unet:
+    model_path: '/home/hashikami/projects/Diff/diffusion/diffusion_model/models/model11.py'
     ch_mul: [1,2,4]
     num_res_blocks: 1
     num_groups: 16
@@ -24,10 +27,11 @@ diffusion:
   checkpoint_path: '/home/hashikami/checkpoint/checkpoint_2025-09-30_15.pth'
 
 diffusion_training:
-  epochs: 100
-  batch_size: 64
+  epochs: 500
+  batch_size: 256
   optim:
     type: 'Adam'
+  checkpoint_dir: '/home/hashikami/checkpoint/diffusion_model_denoiser'
 
 notears:
   method: 'mlp'

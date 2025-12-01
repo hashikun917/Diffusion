@@ -30,6 +30,10 @@ def save_anticausal_predictor_checkpoint(predictor, optimizer, epoch, filename='
     }
     torch.save(checkpoint, filename)
     
+def save_results(losses, result_dir):
+    df = pd.DataFrame({'loss': losses})
+    df.to_csv(os.path.join(result_dir, 'losses.csv'), index=False)
+    
 def save_anticausal_predictor_results(loss_dict, result_dir):
     
     for attr, losses in loss_dict.items():

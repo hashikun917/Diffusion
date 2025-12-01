@@ -1,6 +1,8 @@
 from torchmetrics.classification import BinaryF1Score
 import torch.nn as nn
 import torch
+
+
 def effectiveness(counterfactual_batch, unnormalize_fn, predictors, dataset):
    # print(counterfactual_batch["intensity"].shape)
     targets = {key: value for key , value in counterfactual_batch.items() if key!="image"} #select the counterfactual  parents

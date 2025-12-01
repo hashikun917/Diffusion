@@ -1,4 +1,5 @@
 import torch
+from torch.utils.data import Dataset
 
 import numpy as np
 from pathlib import Path
@@ -29,8 +30,6 @@ class CausalPipeline:
         self.config = config # namespace型のconfig
         self.notears = config.notears
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        #self.output_dir = Path(config.output_dir) # その日の日付のディレクトリを自動で作成するようにしたい。保存
-
         
     def run_causal_discovery(self, X: np.ndarray) -> np.ndarray:
         print("Running causal discovery for meta-data")
@@ -54,7 +53,7 @@ class CausalPipeline:
     def train_meta_causal_model(self, X: np.ndarray, B_est: np.ndarray) -> CAREFL:
         print("Training meta-causal model")
         carefl = CAREFL(self.config)
-        _ = carefl._train(X, B_est) # これではB_estを再度探索するためrun_causal_discoveryの結果と異なる可能性あり
+        _ = carefl._train(X, B_est)
         self.carefl = carefl
         
         return carefl
@@ -91,7 +90,7 @@ class CausalPipeline:
          
         return imgs
     
-    def produce_counterfactuals(self, factual_batch: dict, do_parent: str, intervention_source: Dict[str, List],  w: float=0.8):
+    def produce_counterfactuals(self, factual_batch: dict, do_parent: str, intervention_source: Dataset,  w: float=0.8):
         
         
         utils = DiffusionUtils(timesteps=self.config.diffusion.timesteps)

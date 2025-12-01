@@ -131,9 +131,8 @@ class MorphoMNISTLike(Dataset):
         item['image'] = self.images[idx]
         item['label'] = self.labels[idx]
         return item
-    
 
-class MorphoMNISTLikeForClassifier(Dataset):
+class MorphoMNISTLike2(Dataset):
     def __init__(self, attribute_size, split='train', normalize_=True, transform=None, data_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'data')):
         self.has_valid_set = False
         self.root_dir = data_dir

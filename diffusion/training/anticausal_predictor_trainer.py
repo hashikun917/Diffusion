@@ -1,4 +1,4 @@
-from dataset.morphomnist import MorphoMNISTLikeForClassifier
+from dataset.morphomnist import MorphoMNISTLike2
 from dataset.transforms import ReturnDictTransform
 
 import torch
@@ -33,7 +33,7 @@ class AntiCausalTrainer:
         
         # データセット及びデータローダの設定
         transform = ReturnDictTransform(self.attribute_size)
-        dataset = MorphoMNISTLikeForClassifier(attribute_size=self.attribute_size, split='train', normalize_=True, transform=transform, data_dir=self.config.image_data.data_dir)
+        dataset = MorphoMNISTLike2(attribute_size=self.attribute_size, split='train', normalize_=True, transform=transform, data_dir=self.config.image_data.data_dir)
         self.trainloader = DataLoader(dataset, batch_size=self.training.batch_size, shuffle=True)
         
         # モデル、オプティマイザ、スケジューラの設定
