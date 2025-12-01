@@ -1,0 +1,1 @@
+{"n_eval": 200, "gamma_scale": 3.0, "s0_scale": 2.0, "lambda1": 0.1, "lambda2": 0.01, "w_threshold": 0.3, "nh": 10, "num_expansion": 10, "n_seeds": 10}

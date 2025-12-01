@@ -1,0 +1,6 @@
+{
+        "thickness": [],
+        "intensity": ["thickness"],
+        "slant": ["thickness"],
+        "width": ["thickness"]
+}

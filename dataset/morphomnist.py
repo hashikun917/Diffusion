@@ -164,16 +164,15 @@ class MorphoMNISTLikeForClassifier(Dataset):
         self.attrs = torch.cat([self.metrics[attr].unsqueeze(1) if attr != "digit" else self.metrics[attr]
                                 for attr in attribute_size.keys()], dim=1)
 
-        ### 以下の部分は何に使うのか不明 ###
-        # self.possible_values = {attr: torch.unique(values, dim=0) for attr, values in self.metrics.items()}
+        self.possible_values = {attr: torch.unique(values, dim=0) for attr, values in self.metrics.items()}
 
-        # bins = np.linspace(-1, 1, 10)
-        # self.bins = {}
-        # for attr, values in self.metrics.items():
-        #     if attr != "digit":
-        #         data = values.numpy()
-        #         digitized = np.digitize(data, bins)
-        #         self.bins[attr] = [data[digitized == i].mean() for i in range(1, len(bins))]
+        bins = np.linspace(-1, 1, 10)
+        self.bins = {}
+        for attr, values in self.metrics.items():
+            if attr != "digit":
+                data = values.numpy()
+                digitized = np.digitize(data, bins)
+                self.bins[attr] = [data[digitized == i].mean() for i in range(1, len(bins))]
 
     def __len__(self):
         return len(self.images)

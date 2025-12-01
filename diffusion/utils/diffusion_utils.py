@@ -115,7 +115,7 @@ class DiffusionUtils:
 
   # one step sample 1
   @torch.no_grad()
-  def ddim_p_sample(self, denoise_model, x, t_index, eta, interval, cond, w, reverse=False):
+  def ddim_p_sample(self, denoise_model, x, t_index, eta, interval, cond, w, reverse=False, cond_fn=None):
     """1ステップ逆過程を進む
       Args:
           model ( nn.Module ): U-Net
@@ -147,11 +147,16 @@ class DiffusionUtils:
         # 条件付きの場合
         # epsilon_theta_t = denoise_model(x, t, cond)
       """
-      # 分類器フリーガイダンスの場合
-      epsilon_theta_t_cond = denoise_model(x, t, cond)
-      uncond = torch.zeros_like(cond)
-      epsilon_theta_t_uncond = denoise_model(x, t, uncond)
-      epsilon_theta_t = (1 + w) * epsilon_theta_t_cond - w * epsilon_theta_t_uncond
+      
+      if cond_fn is not None: # 分類器ガイダンスを用いる場合
+        uncond = torch.zeros_like(cond)
+        epsilon_theta_t = denoise_model(x, t, uncond)
+        epsilon_theta_t = epsilon_theta_t - w * (1 - alphas_t).sqrt() * cond_fn(x, t, cond)
+      else: # 分類器フリーガイダンスを用いる場合
+        epsilon_theta_t_cond = denoise_model(x, t, cond)
+        uncond = torch.zeros_like(cond)
+        epsilon_theta_t_uncond = denoise_model(x, t, uncond)
+        epsilon_theta_t = (1 + w) * epsilon_theta_t_cond - w * epsilon_theta_t_uncond
 
       # calculate x_{t-1}
       sigma_t = eta * torch.sqrt((1 - alphas_prev_t) / (1 - alphas_t) * (1 - alphas_t / alphas_prev_t))

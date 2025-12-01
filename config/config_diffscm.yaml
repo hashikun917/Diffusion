@@ -1,13 +1,14 @@
 image_data:
   name: 'morphomnist'
+  data_dir: '/home/hashikami/datadrive/morphomnist_all_model'
   image_size: 28
   use_minmax_scale: false
   meta_data:
     d: 4
     cond_stats_path: 'dataset/cond_stats.json'
     causalgraph_path: 'dataset/B_true.npy'
+    attribute_size_path: 'dataset/attribute_size.json'
     graph_path: 'dataset/causal_graph.json'
-
 
 diffusion:
   noise_schedule: 'linear'
@@ -19,31 +20,25 @@ diffusion:
     droprate: 0.0
     cond_type: 'add'
     use_attn: false
-  cfg:
-    uncond_rate: 0.1
   checkpoint_path: '/home/hashikami/checkpoint/checkpoint_2025-09-30_15.pth'
 
 diffusion_training:
   epochs: 100
-  batch_size: 64
+  batch_size: 256
   optim:
     type: 'Adam'
 
-notears:
-  method: 'mlp'
-  lambda1: 0.01
-  w_threshold: 0.3
-
-carefl:
-  net_class: 'mlp4'
-  nh: 100
-  prior_dist: 'normal'
-  scale_shift_base: true
-  inverse_model: true
-
-carefl_training:
-  epochs: 30
-  batch_size: 128
+anticausal_predictor_training:
+  epochs: 100
+  batch_size: 64
+  optim:
+    type: 'Adam'
+  checkpoint_dir: '/home/hashikami/checkpoint/anticausal_predictor'
+  checkpoint_name: # 実際に使用するチェックポイント名
+    thickness:
+    intensity:
+    slant:
+    width:
 
 evaluate:
   batch_size: 128

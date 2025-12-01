@@ -73,7 +73,7 @@ QUARTILE_RANGES = {
 def evaluate_effectiveness(test_set: Dataset, unnormalize_fn, batch_size:int , scm: Union[nn.Module, CausalPipeline], attributes: List[str], do_parent:str,
                            predictors: Dict[str, Classifier], dataset: str, intervention_source: Dataset = None, w: float=0.8):
 
-    test_data_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=7)
+    test_data_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
     effectiveness_scores = {attr_key: [] for attr_key in attributes}
     for factual_batch in tqdm(test_data_loader):
