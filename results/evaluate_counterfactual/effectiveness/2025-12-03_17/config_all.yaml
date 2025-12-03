@@ -47,7 +47,7 @@ carefl:
   inverse_model: true
 
 carefl_training:
-  epochs: 100
+  epochs: 3
   batch_size: 256
 
 evaluate:

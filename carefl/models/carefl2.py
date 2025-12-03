@@ -61,6 +61,21 @@ class CAREFL:
                 
         return z
     
+    def generate_on_intervention(self, z: torch.Tensor, interventions: dict):
+        
+        idx = list(interventions.keys())[0]
+        intervention = interventions[idx]
+        
+        flows = self.flow.flow.flows
+        for affine in flows[::-1]:
+            trans_idx = affine.trans_idx[0]
+            if trans_idx == idx:
+                z[:, trans_idx] = intervention
+            else:
+                z, _ = affine.backward(z)
+                
+        return z
+        
         
     def predict_counterfactual(self, x_obs, cf_idx, cf_val):
         

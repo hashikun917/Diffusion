@@ -23,10 +23,10 @@ from evaluate.anticausal.classifiers.classifier import Classifier
 # from models.classifiers.celeba_classifier import CelebaClassifier
 # from models.classifiers.celeba_complex_classifier import CelebaComplexClassifier
 # from models.classifiers.adni_classifier import ADNIClassifier
-from dataset.morphomnist import MorphoMNISTLike, load_morphomnist_like
+from dataset.morphomnist import MorphoMNISTLike2, load_morphomnist_like
 # from datasets.celeba.dataset import Celeba
 # from datasets.adni.dataset import ADNI
-from evaluate.utils.transforms import get_attribute_ids # ReturnDictTransform
+from evaluate.utils.transforms import get_attribute_ids, ReturnDictTransform
 
 # from evaluation.metrics.composition import composition
 # from evaluation.metrics.minimality import minimality
@@ -40,52 +40,89 @@ from dataset.morphomnist import unnormalize as unnormalize_morphomnist
 
 from pipeline.causal_pipeline import CausalPipeline
 from diffusion.diffusion_model.models.model11 import UNet
+from diffusion.utils.utils import load_json
 from evaluate.utils.save_results import save_effectiveness_score, save_config, save_params
 from evaluate.utils.parser_utils import str2bool
+
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 rng = np.random.default_rng()
 
 dataclass_mapping = {
-    "morphomnist": (MorphoMNISTLike, unnormalize_morphomnist),
+    "morphomnist": (MorphoMNISTLike2, unnormalize_morphomnist),
     # "celeba": (Celeba, unnormalize_celeba),
     # "adni": (ADNI, unnormalize_adni)
 }
 
-MIN_MAX = {
-    "thickness": [0.82152224, 6.384839],
-    "intensity": [66.48045, 254.93214],
-    "slant": [-43.692436, 66.94711],
-    "width": [10.000215, 24.999382],
-    "image": [0.0, 255.0]
-}
+# MIN_MAX = {
+#     "thickness": [0.82152224, 6.384839],
+#     "intensity": [66.48045, 254.93214],
+#     "slant": [-43.692436, 66.94711],
+#     "width": [10.000215, 24.999382],
+#     "image": [0.0, 255.0]
+# }
 
-QUARTILE_RANGES = {
-    'thickness': [2.04805145, 2.881358275],
-    'intensity': [117.097564, 197.4233375],
-    'slant': [-19.0626455, -2.3332007],
-    'width': [11.03513725, 19.5581495]
-}
+# QUARTILE_RANGES = {
+#     'thickness': [2.04805145, 2.881358275],
+#     'intensity': [117.097564, 197.4233375],
+#     'slant': [-19.0626455, -2.3332007],
+#     'width': [11.03513725, 19.5581495]
+# }
 
+def different_value(possible_values, value, bins, attribute):
+    if bins is not None and attribute in bins:
+        return np.digitize(possible_values, bins[attribute]) != np.searchsorted(bins[attribute], value)
+    else:
+        return possible_values != value
 
+def produce_counterfactuals(factual_batch: Dict, scm: Union[nn.Module, CausalPipeline], do_parent: str, intervention_source: Dataset, force_change: bool = False, possible_values = None, device: str = 'cuda', bins = None):
+    
+    factual_batch = {k: v.to(device) for k, v in factual_batch.items()}
 
+    #update with the counterfactual parent
+    if force_change:
+        possible_values = possible_values[do_parent]
+        values = factual_batch[do_parent].cpu()
+        if do_parent not in ["digit", "apoE", "slice"]:
+            interventions = {do_parent: torch.cat([torch.tensor(np.random.choice(possible_values[different_value(possible_values, value, bins, do_parent)])).unsqueeze(0)
+                                                for value in values]).view(-1).unsqueeze(1).to(device)}
+        else:
+            interventions = {do_parent: torch.cat([torch.tensor(rng.choice(possible_values[torch.where((different_value(possible_values, value, bins, do_parent)).any(dim=1))], axis=0)).unsqueeze(0)
+                                                for value in values]).to(device)}
+    else:
+        batch_size, _ , _ , _ = factual_batch["image"].shape
+        idxs = torch.randperm(len(intervention_source))[:batch_size] # select random indices from train set to perform interventions
+
+        interventions = {do_parent: torch.cat([intervention_source[id][do_parent] for id in idxs]).view(-1).unsqueeze(1).to(device)
+                        if do_parent not in ["digit", "apoE", "slice"] else torch.cat([intervention_source[id][do_parent].unsqueeze(0).to(device) for id in idxs])}
+        
+
+    if isinstance(scm, nn.Module):
+        abducted_noise = scm.encode(**factual_batch)
+        counterfactual_batch = scm.decode(interventions, **abducted_noise)
+    elif isinstance(scm, CausalPipeline):
+        diffused_noise = scm.diffuse(factual_batch)
+        counterfactual_batch = scm.denoise(interventions, diffused_noise)
+        
+    return counterfactual_batch
+        
 def evaluate_effectiveness(test_set: Dataset, unnormalize_fn, batch_size:int , scm: Union[nn.Module, CausalPipeline], attributes: List[str], do_parent:str,
-                           predictors: Dict[str, Classifier], dataset: str, intervention_source: Dataset = None, w: float=0.8):
+                           intervention_source: Dataset, predictors: Dict[str, Classifier], dataset: str):
 
     test_data_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
     effectiveness_scores = {attr_key: [] for attr_key in attributes}
     for factual_batch in tqdm(test_data_loader):
         
-        if isinstance(scm, nn.Module):
-            counterfactuals = produce_counterfactuals(factual_batch, scm, do_parent, intervention_source,
-                                                  force_change=True, possible_values=test_set.possible_values, bins=test_set.bins)
-        elif isinstance(scm, CausalPipeline):
-            ### いずれは元々の実装のintervention_source（possible_valuesからとってくるor訓練セットからとってくる）に変えるべき ###
-            # intervention_source = {atr: np.random.uniform(MIN_MAX[atr][0], MIN_MAX[atr][1], size=factual_batch['image'].shape[0]).tolist() for atr in attribute_size.keys()}
-            intervention_source = {atr: np.random.uniform(QUARTILE_RANGES[atr][0], QUARTILE_RANGES[atr][1], size=factual_batch['image'].shape[0]).tolist() for atr in attribute_size.keys()}
-            counterfactuals = scm.produce_counterfactuals(factual_batch, do_parent, intervention_source, w=w)
+        # if isinstance(scm, nn.Module):
+        counterfactuals = produce_counterfactuals(factual_batch, scm, do_parent, intervention_source,
+                                                force_change=True, possible_values=test_set.possible_values, bins=test_set.bins)
+        # elif isinstance(scm, CausalPipeline):
+        #     ### いずれは元々の実装のintervention_source（possible_valuesからとってくるor訓練セットからとってくる）に変えるべき ###
+        #     # intervention_source = {atr: np.random.uniform(MIN_MAX[atr][0], MIN_MAX[atr][1], size=factual_batch['image'].shape[0]).tolist() for atr in attribute_size.keys()}
+        #     intervention_source = {atr: np.random.uniform(QUARTILE_RANGES[atr][0], QUARTILE_RANGES[atr][1], size=factual_batch['image'].shape[0]).tolist() for atr in attribute_size.keys()}
+        #     counterfactuals = scm.produce_counterfactuals(factual_batch, do_parent, intervention_source, w=w)
             
         e_score = effectiveness(counterfactuals, unnormalize_fn, predictors, dataset)
 
@@ -121,8 +158,6 @@ def parse_arguments():
     ### 自分の研究用に追加したもの ###
     parser.add_argument("--data-dir", type=str, help="Dataset directory.", default="/home/hashikami/datadrive/morphomnist_all_model")
     parser.add_argument("--scm-type", type=str, help="The type of SCM (ours or baseline)", default="ours")
-    parser.add_argument("--run-causaldiscovery", type=str2bool, help="Whether to run causal discovery", default=True)
-    parser.add_argument("--guidance-scale", type=float, help="Guidance scale", default=0.8)
     parser.add_argument("--result-dir", type=str, help="Result directory.", default="results/evaluate_counterfactual/effectiveness")
     
     return parser.parse_args()
@@ -152,14 +187,8 @@ if __name__ == "__main__":
     # attribute_size = config["attribute_size"]
     
     dataset = config.image_data.name
-    if dataset == "morphomnist":
-        attribute_size = {
-            "thickness": 1,
-            "intensity": 1,
-            "slant": 1,
-            "width": 1
-        } ### いずれconfigから読み込めるようにしたい ###
-
+    attribute_size = load_json(config.image_data.meta_data.attribute_size_path)
+    
     # models = {}
     # for variable in config["causal_graph"].keys():
     #     if variable not in config["mechanism_models"]:
@@ -177,28 +206,15 @@ if __name__ == "__main__":
     # batch_size = config["mechanism_models"]["image"]["params"]["batch_size_val"]
     batch_size = config.evaluate.batch_size
 
-    scm_type = args.scm_type
-    if scm_type == "ours":
-        
+    if args.scm_type == "ours":
         scm = CausalPipeline(config)
-        _, _, metrics_df = load_morphomnist_like(args.data_dir)
-        metrics = metrics_df.to_numpy().astype(np.float32)
-        
-        if args.run_causaldiscovery:
-            B = scm.run_causal_discovery(metrics)
-        else:
-            B = np.load(config.image_data.meta_data.causalgraph_path)
-        
-        carefl = scm.train_meta_causal_model(metrics, B)
-        
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        denoise_model = UNet().to(device)
-        checkpoint = torch.load(config.diffusion.checkpoint_path)
-        denoise_model.load_state_dict(checkpoint['denoise_model_state_dict'])
-        denoise_model.eval()
-        scm.denoise_model = denoise_model
-
-    elif scm_type == "baseline":
+        scm.prepare_models()
+    
+    # elif args.scm_type == "diffscm":
+    #     scm = DiffSCM(config)
+    #     scm.prepare_models()
+    
+    elif args.scm_type == "baseline":
         # scm = SCM(checkpoint_dir=config["checkpoint_dir"],
         #           graph_structure=config["causal_graph"],
         #           temperature=args.sampling_temperature,
@@ -207,13 +223,13 @@ if __name__ == "__main__":
 
     data_class, unnormalize_fn = dataclass_mapping[dataset]
 
-    # transform = ReturnDictTransform(attribute_size)
+    transform = ReturnDictTransform(attribute_size)
 
-    # train_set = data_class(attribute_size, split='train', transform=transform)
-    # test_set = data_class(attribute_size, split='test', transform=transform)
     data_dir = args.data_dir
-    test_set = data_class(root_dir=data_dir,
-                            columns=['thickness', 'intensity', 'slant', 'width'], train=False)
+    train_set = data_class(attribute_size, split='train', transform=transform, data_dir=data_dir)
+    test_set = data_class(attribute_size, split='test', transform=transform, data_dir=data_dir)
+    
+    
     # if args.qualitative > 0:
     #     produce_qualitative_samples(dataset=test_set, scm=scm, parents=list(attribute_size.keys()),
     #                                 intervention_source=train_set, unnormalize_fn=unnormalize_fn, num=args.qualitative,
@@ -251,11 +267,12 @@ if __name__ == "__main__":
             cls.to('cuda')
 
         for pa in attribute_size.keys():
-            effectiveness_score = evaluate_effectiveness(test_set, unnormalize_fn, batch_size, scm=scm, attributes=list(attribute_size.keys()), do_parent=pa,
-                            predictors=predictors, dataset=dataset, w=args.guidance_scale)
+            effectiveness_score = evaluate_effectiveness(test_set, unnormalize_fn, batch_size, scm, attributes=list(attribute_size.keys()), do_parent=pa,
+                           intervention_source=train_set, predictors=predictors, dataset=dataset)
+
             save_effectiveness_score(effectiveness_score, pa, result_dir)
             
-        params = {'dataset': dataset, 'scm_type': scm_type, 'run_causaldiscovery': args.run_causaldiscovery, 'guidance_scale': args.guidance_scale}
+        params = {'metrics': args.metrics, 'dataset': dataset, 'scm_type': args.scm_type}
         save_params(params, result_dir)
         save_config(args.config, result_dir)
             
