@@ -137,17 +137,6 @@ class DiffusionUtils:
       alphas_t = self.extract(self.alphas_cumprod, t, x.shape)
       alphas_prev_t = self.extract(alphas_cumprod_interval_prev, t, x.shape)
       
-      """
-      # model{n} n < 9の場合
-      # predict noise using model
-      if cond is None:
-        # 無条件の場合
-        epsilon_theta_t = denoise_model(x, t)
-      else:
-        # 条件付きの場合
-        # epsilon_theta_t = denoise_model(x, t, cond)
-      """
-      
       if cond_fn is not None: # 分類器ガイダンスを用いる場合
         uncond = torch.zeros_like(cond)
         epsilon_theta_t = denoise_model(x, t, uncond)
@@ -175,22 +164,16 @@ class DiffusionUtils:
       alphas_t = self.extract(self.alphas_cumprod, t, x.shape)
       alphas_next_t = self.extract(alphas_cumprod_interval_next, t, x.shape)
 
-      """
-      # model{n} n < 9の場合
-      # predict noise using model
-      if cond is None:
-        # 無条件の場合
-        epsilon_theta_t = denoise_model(x, t)
-      else:
-        # 条件付きの場合
-        # epsilon_theta_t = denoise_model(x, t, cond)
-      """
+    
+      # # 分類器フリーガイダンスの場合
+      # epsilon_theta_t_cond = denoise_model(x, t, cond)
+      # uncond = torch.zeros_like(cond)
+      # epsilon_theta_t_uncond = denoise_model(x, t, uncond)
+      # epsilon_theta_t = (1 + w) * epsilon_theta_t_cond - w * epsilon_theta_t_uncond
       
-      # 分類器フリーガイダンスの場合
-      epsilon_theta_t_cond = denoise_model(x, t, cond)
+      # 無条件拡散
       uncond = torch.zeros_like(cond)
-      epsilon_theta_t_uncond = denoise_model(x, t, uncond)
-      epsilon_theta_t = (1 + w) * epsilon_theta_t_cond - w * epsilon_theta_t_uncond
+      epsilon_theta_t = denoise_model(x, t, uncond)
       
 
       # calculate x_{t+1}
@@ -214,7 +197,7 @@ class DiffusionUtils:
       return x_t_next
 
   @torch.no_grad()
-  def ddim_p_sample_loop(self, denoise_model, eta, interval, cond, w, image_size, batch_size, channels=1, reverse=False, input_img=None, noise=None):
+  def ddim_p_sample_loop(self, denoise_model, eta, interval, cond, w, image_size, batch_size, channels=1, reverse=False, input_img=None, noise=None, cond_fn=None):
     """逆過程のステップを繰り返し，画像を生成する
       Args:
           model ( nn.Module ): U-Net
@@ -255,7 +238,7 @@ class DiffusionUtils:
           img = self.ddim_p_sample(denoise_model, img, t, eta, interval, cond=cond, w=w)
         """
         # 分類器フリーガイダンスの場合
-        img = self.ddim_p_sample(denoise_model, img, t, eta, interval, cond, w)
+        img = self.ddim_p_sample(denoise_model, img, t, eta, interval, cond, w, cond_fn=cond_fn)
           
         imgs.append(img)
 

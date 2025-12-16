@@ -1,0 +1,51 @@
+carefl:
+  inverse_model: true
+  net_class: mlp4
+  nh: 100
+  prior_dist: normal
+  scale_shift_base: true
+carefl_training:
+  batch_size: 256
+  epochs: 100
+diffusion:
+  checkpoint_path: /home/hashikami/checkpoint/diffusion_model_denoiser/checkpoint_2025-12-01_19.pth
+  guidance:
+    guidance_scale: 1.0
+    type: classifier-free
+    uncond_rate: 0.1
+  noise_schedule: linear
+  timesteps: 500
+  unet:
+    ch_mul:
+    - 1
+    - 2
+    - 4
+    cond_type: add
+    droprate: 0.0
+    model_path: /home/hashikami/projects/Diff/diffusion/diffusion_model/models/model11.py
+    num_groups: 16
+    num_res_blocks: 1
+    use_attn: false
+diffusion_training:
+  batch_size: 256
+  checkpoint_dir: /home/hashikami/checkpoint/diffusion_model_denoiser
+  epochs: 500
+  optim:
+    type: Adam
+evaluate:
+  batch_size: 256
+  run_causaldiscovery: false
+image_data:
+  data_dir: /home/hashikami/datadrive/morphomnist_all_model
+  image_size: 28
+  meta_data:
+    attribute_size_path: dataset/attribute_size.json
+    causalgraph_path: dataset/B_true.npy
+    d: 4
+    graph_path: dataset/causal_graph.json
+  name: morphomnist
+  use_minmax_scale: false
+notears:
+  lambda1: 0.01
+  method: mlp
+  w_threshold: 0.3

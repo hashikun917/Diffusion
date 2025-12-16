@@ -133,7 +133,7 @@ class MorphoMNISTLike(Dataset):
         return item
 
 class MorphoMNISTLike2(Dataset):
-    def __init__(self, attribute_size, split='train', normalize_=True, transform=None, data_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'data')):
+    def __init__(self, attribute_size, split='train', normalize_=True, transform=None, data_dir='/home/hashikami/datadrive/morphomnist_all_model'):
         self.has_valid_set = False
         self.root_dir = data_dir
         self.train = True if split == 'train' else False

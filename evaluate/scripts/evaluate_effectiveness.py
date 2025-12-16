@@ -2,7 +2,6 @@ import torch
 import numpy as np
 from typing import Dict, List
 from json import load
-from importlib import import_module
 # from model import SCM
 from tqdm import tqdm
 import torch.nn as nn
@@ -27,6 +26,7 @@ from dataset.morphomnist import MorphoMNISTLike2, load_morphomnist_like
 # from datasets.celeba.dataset import Celeba
 # from datasets.adni.dataset import ADNI
 from evaluate.utils.transforms import get_attribute_ids, ReturnDictTransform
+from evaluate.utils.load_utils import load_models
 
 # from evaluation.metrics.composition import composition
 # from evaluation.metrics.minimality import minimality
@@ -41,6 +41,7 @@ from dataset.morphomnist import unnormalize as unnormalize_morphomnist
 from pipeline.causal_pipeline import CausalPipeline
 from diffusion.diffusion_model.models.model11 import UNet
 from diffusion.utils.utils import load_json
+from baselines.diffscm.diffscm import DiffusionSCM
 from evaluate.utils.save_results import save_effectiveness_score, save_config, save_params
 from evaluate.utils.parser_utils import str2bool
 
@@ -104,6 +105,9 @@ def produce_counterfactuals(factual_batch: Dict, scm: Union[nn.Module, CausalPip
     elif isinstance(scm, CausalPipeline):
         diffused_noise = scm.diffuse(factual_batch)
         counterfactual_batch = scm.denoise(interventions, diffused_noise)
+    elif isinstance(scm, DiffusionSCM):
+        diffused_noise = scm.diffuse(factual_batch)
+        counterfactual_batch = scm.denoise(factual_batch, interventions, diffused_noise)
         
     return counterfactual_batch
         
@@ -157,7 +161,7 @@ def parse_arguments():
     
     ### 自分の研究用に追加したもの ###
     parser.add_argument("--data-dir", type=str, help="Dataset directory.", default="/home/hashikami/datadrive/morphomnist_all_model")
-    parser.add_argument("--scm-type", type=str, help="The type of SCM (ours or baseline)", default="ours")
+    parser.add_argument("--scm-type", type=str, help="The type of SCM (ours or diffscm or baseline)", default="ours")
     parser.add_argument("--result-dir", type=str, help="Result directory.", default="results/evaluate_counterfactual/effectiveness")
     
     return parser.parse_args()
@@ -176,8 +180,8 @@ if __name__ == "__main__":
     #     config = load(f)
     
     with open(args.config, "r") as f:
-        config_raw = yaml.load(f, Loader=yaml.FullLoader)
-    config = dict2namespace(config_raw)
+        config_dict = yaml.load(f, Loader=yaml.FullLoader)
+    config = dict2namespace(config_dict)
 
     now = datetime.now().strftime('%Y-%m-%d_%H')
     result_dir = os.path.join(args.result_dir, now)
@@ -188,38 +192,25 @@ if __name__ == "__main__":
     
     dataset = config.image_data.name
     attribute_size = load_json(config.image_data.meta_data.attribute_size_path)
-    
-    # models = {}
-    # for variable in config["causal_graph"].keys():
-    #     if variable not in config["mechanism_models"]:
-    #         continue
-    #     model_config = config["mechanism_models"][variable]
 
-    #     module = import_module(model_config["module"])
-    #     model_class = getattr(module, model_config["model_class"])
-    #     model = model_class(params=model_config["params"], attr_size=attribute_size)
-
-    #     models[variable] = model
-    #     if "finetune" in model_config["params"] and model_config["params"]["finetune"] == 1:
-    #         model.name += '_finetuned'
-
-    # batch_size = config["mechanism_models"]["image"]["params"]["batch_size_val"]
     batch_size = config.evaluate.batch_size
 
     if args.scm_type == "ours":
         scm = CausalPipeline(config)
         scm.prepare_models()
     
-    # elif args.scm_type == "diffscm":
-    #     scm = DiffSCM(config)
-    #     scm.prepare_models()
+    elif args.scm_type == "diffscm":
+        scm = DiffusionSCM(config)
+        scm.prepare_models()
     
     elif args.scm_type == "baseline":
-        # scm = SCM(checkpoint_dir=config["checkpoint_dir"],
-        #           graph_structure=config["causal_graph"],
-        #           temperature=args.sampling_temperature,
-        #           **models)
-        pass
+        
+        causal_graph = load_json(config.image_data.meta_data.graph_path)
+        models = load_models(config_dict, attribute_size)
+        scm = SCM(checkpoint_dir=config.checkpoint_dir,
+                  graph_structure=causal_graph,
+                  temperature=config.sampling_temperature,
+                  **models)
 
     data_class, unnormalize_fn = dataclass_mapping[dataset]
 
@@ -260,9 +251,7 @@ if __name__ == "__main__":
 
         # load checkpoints of the predictors
         for key , cls in predictors.items():
-            print(key)
             file_name = next((file for file in os.listdir(config_cls["ckpt_path"]) if file.startswith(key)), None)
-            print(file_name)
             cls.load_state_dict(torch.load(config_cls["ckpt_path"] + file_name , map_location=torch.device('cuda'))["state_dict"])
             cls.to('cuda')
 

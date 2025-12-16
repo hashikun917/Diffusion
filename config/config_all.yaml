@@ -22,9 +22,10 @@ diffusion:
     droprate: 0.0
     cond_type: 'add'
     use_attn: false
-  cfg:
+  guidance:
+    type: 'classifier-free'
     uncond_rate: 0.1
-    guidance_scale: 0.1
+    guidance_scale: 1.0
   checkpoint_path: '/home/hashikami/checkpoint/diffusion_model_denoiser/checkpoint_2025-12-01_19.pth'
 
 diffusion_training:
@@ -52,4 +53,4 @@ carefl_training:
 
 evaluate:
   batch_size: 256
-  run_causaldiscovery: false
+  run_causaldiscovery: true

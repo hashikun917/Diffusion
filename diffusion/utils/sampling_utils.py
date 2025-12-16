@@ -1,5 +1,9 @@
- from diffusion.utils.utils import load_json
-from torch.nn import functional as F
+import torch
+import torch.nn.functional as F
+
+from diffusion.utils.utils import load_json
+
+
 
 def get_models_functions(config, anti_causal_predictors):
     
@@ -13,7 +17,7 @@ def get_models_functions(config, anti_causal_predictors):
             
             if dataset == "morphomnist":
                 
-                attrs = causal_graph.keys()
+                attrs = list(causal_graph.keys())
                 
                 grad = 0
                 for key, clfs in anti_causal_predictors.items():
@@ -22,12 +26,10 @@ def get_models_functions(config, anti_causal_predictors):
                     parents = causal_graph[key]
                     parents_idx = [attrs.index(parent) for parent in parents] if parents else None
                     
-                    target = cond[:, attr_idx]
+                    target = cond[:, [attr_idx]] # (B, 1)
                     
-                    if parents:
-                        pred = clfs(x, t, cond[:, parents_idx]) # cond[:, parents_idx]は(B, len(parents))のshapeを想定
-                    else:
-                        pred = clfs(x, t) # (B, 1)を想定
+                    parent_cond = cond[:, parents_idx] if parents else torch.Tensor([])
+                    pred = clfs(x, t, parent_cond)
                     
                     mse = F.mse_loss(pred, target, reduction='none') # (B, 1)
                     log_prob = -0.5 * mse.sum(dim=1) # (B,)

@@ -5,7 +5,6 @@ image_data:
   use_minmax_scale: false
   meta_data:
     d: 4
-    cond_stats_path: 'dataset/cond_stats.json'
     causalgraph_path: 'dataset/B_true.npy'
     attribute_size_path: 'dataset/attribute_size.json'
     graph_path: 'dataset/causal_graph.json'
@@ -20,25 +19,44 @@ diffusion:
     droprate: 0.0
     cond_type: 'add'
     use_attn: false
-  checkpoint_path: '/home/hashikami/checkpoint/checkpoint_2025-09-30_15.pth'
+  guidance:
+    type: 'classifier'
+    guidance_scale: 1.0
+  checkpoint_path: '/home/hashikami/checkpoint/diffusion_model_denoiser/checkpoint_2025-12-01_19.pth'
 
 diffusion_training:
-  epochs: 100
+  epochs: 500
   batch_size: 256
   optim:
     type: 'Adam'
 
+anticausal_predictor:
+  encoder_unet:
+    mod_channel: 32
+    channel_mult: [1, 2]
+    pool_type: 'adaptive'
+    out_channels: 32
+  classifier_width: 32
+  checkpoint_dir: '/home/hashikami/checkpoint/anticausal_predictor/2025-12-10/'
+
 anticausal_predictor_training:
-  epochs: 100
+  epochs: 50
   batch_size: 64
   optim:
     type: 'Adam'
-  checkpoint_dir: '/home/hashikami/checkpoint/anticausal_predictor'
-  checkpoint_name: # 実際に使用するチェックポイント名
-    thickness:
-    intensity:
-    slant:
-    width:
+  save_checkpoint_dir: '/home/hashikami/checkpoint/anticausal_predictor/'
+
+carefl:
+  net_class: 'mlp4'
+  nh: 100
+  prior_dist: 'normal'
+  scale_shift_base: true
+  inverse_model: true
+
+carefl_training:
+  epochs: 100
+  batch_size: 256
 
 evaluate:
-  batch_size: 128
+  batch_size: 256
+  use_carefl: true

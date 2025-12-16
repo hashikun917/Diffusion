@@ -1,0 +1,104 @@
+image_data:
+  name: 'morphomnist'
+  data_dir: '/home/hashikami/datadrive/morphomnist_all_model'
+  image_size: 28
+  use_minmax_scale: false
+  meta_data:
+    d: 4
+    causalgraph_path: 'dataset/B_true.npy'
+    attribute_size_path: 'dataset/attribute_size.json'
+    graph_path: 'dataset/causal_graph.json'
+
+causal_graph:
+  thickness: []
+  intensity: ['thickness']
+  slant: ['thickness']
+  width: ['thickness']
+  image: ['thickness', 'intensity', 'slant', 'width']
+
+attribute_size:
+  thickness: 1
+  intensity: 1
+  slant: 1
+  width: 1
+
+mechanism_models:
+  thickness:
+    model_type: flow
+    model_class: ThicknessFlow
+    module: models.flows
+    params:
+      layers: 3
+      lr: 1.0e-3
+      batch_size_train: 64
+      batch_size_val: 64
+      patience: 5
+      max_epochs: 1000
+      train_val_split: 0.8
+
+  intensity:
+    model_type: flow
+    model_class: IntensityFlow
+    module: models.flows
+    params:
+      layers: 3
+      lr: 1.0e-3
+      batch_size_train: 64
+      batch_size_val: 64
+      patience: 5
+      max_epochs: 1000
+      train_val_split: 0.8
+
+  slant:
+    model_type: flow
+    model_class: SlantFlow
+    module: models.flows
+    params:
+      layers: 3
+      lr: 1.0e-3
+      batch_size_train: 64
+      batch_size_val: 64
+      patience: 5
+      max_epochs: 1000
+      train_val_split: 0.8
+
+  width:
+    model_type: flow
+    model_class: WidthFlow
+    module: models.flows
+    params:
+      layers: 3
+      lr: 1.0e-3
+      batch_size_train: 64
+      batch_size_val: 64
+      patience: 5
+      max_epochs: 1000
+      train_val_split: 0.8
+
+  image:
+    model_type: vae
+    model_class: MmnistCondVAE
+    module: models.vaes
+    params:
+      n_chan: [1, 32, 32, 32]
+      latent_dim: 16
+      hidden_dim: 128
+      beta: 1
+      lr: 1.0e-3
+      gradient_clip_val: 350
+      batch_size_train: 128
+      batch_size_val: 128
+      patience: 10
+      max_epochs: 1000
+      train_val_split: 0.8
+      weight_decay: 0.01
+      ema: "True"
+      fixed_logvar: "False"
+
+sampling_temperature: 0.1
+
+evaluate:
+  batch_size: 256
+
+dataset: "morphomnist"
+checkpoint_dir: "./checkpoint/benchmark/morphomnist/trained_scm"

@@ -42,7 +42,7 @@ class CausalPipeline:
         
         self.utils = DiffusionUtils(timesteps=config.diffusion.timesteps)
         
-        self.w = config.diffusion.cfg.guidance_scale
+        self.w = config.diffusion.guidance.guidance_scale
         
     def run_causal_discovery(self, X: np.ndarray) -> np.ndarray:
         print("Running causal discovery for meta-data")
@@ -182,7 +182,7 @@ class CausalPipeline:
         noise_image = diffused_noise['noise_image']
         images_cf = self.utils.ddim_p_sample_loop(self.denoise_model, 0.0, 1, cond_cf, self.w, noise_image.shape[2], noise_image.shape[0], channels=1, reverse=False, noise=noise_image)
         
-        counterfactual_batch = {'image': images_cf[-1].clamp(min=-1.0, max=1.0), **{attr: cond_cf[:, self.attrs.index(attr)].clamp(min=-1.0, max=1.0).unsqueeze(1) for attr in self.attrs}}
+        counterfactual_batch = {'image': images_cf[-1].clamp(min=-1.0, max=1.0), **{attr: cond_cf[:, [self.attrs.index(attr)]].clamp(min=-1.0, max=1.0) for attr in self.attrs}}
         
         return counterfactual_batch
         

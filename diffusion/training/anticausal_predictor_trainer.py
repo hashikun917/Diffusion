@@ -27,6 +27,8 @@ class AntiCausalTrainer:
         # configの読み込み
         self.config = config
         self.result_dir = result_dir
+        self.encoder = config.anticausal_predictor.encoder_unet
+        self.anticausal = config.anticausal_predictor
         self.training = config.anticausal_predictor_training
         self.attribute_size = load_json(config.image_data.meta_data.attribute_size_path)
         self.causal_graph = load_json(config.image_data.meta_data.graph_path)
@@ -37,7 +39,7 @@ class AntiCausalTrainer:
         self.trainloader = DataLoader(dataset, batch_size=self.training.batch_size, shuffle=True)
         
         # モデル、オプティマイザ、スケジューラの設定
-        self.anticausal_predictors = {attr: AntiCausalPredictor(encoder=EncoderUNet(cdim=len(self.causal_graph[attr]))) for attr in self.causal_graph.keys()}
+        self.anticausal_predictors = {attr: AntiCausalPredictor(encoder=EncoderUNet(cdim=len(self.causal_graph[attr]), mod_ch=self.encoder.mod_channel, ch_mul=self.encoder.channel_mult, pool=self.encoder.pool_type, out_channels=self.encoder.out_channels), classifier_width=self.anticausal.classifier_width) for attr in self.causal_graph.keys()}
         self.optimizers = {attr: optim.Adam(self.anticausal_predictors[attr].parameters(), lr=1e-4, weight_decay=0.0) for attr in self.causal_graph.keys()}
         
         # todo:チェックポイントが存在するなら読み込み
@@ -82,8 +84,10 @@ class AntiCausalTrainer:
                     loss_dict[attr].append(loss.item())
                     
                 if (e + 1) % save_interval == 0:
-                    date = datetime.now().strftime("%Y-%m-%d_%H")
-                    save_anticausal_predictor_checkpoint(predictor, optimizer, e + 1, filename=os.path.join(self.config.anticausal_predictor_training.checkpoint_dir, f'checkpoint_{attr}_{date}.pth'))
+                    date = datetime.now().strftime("%Y-%m-%d")
+                    save_checkpoint_dir = os.path.join(self.config.anticausal_predictor_training.save_checkpoint_dir, date)
+                    os.makedirs(save_checkpoint_dir, exist_ok=True)
+                    save_anticausal_predictor_checkpoint(predictor, optimizer, e + 1, filename=os.path.join(save_checkpoint_dir, f'checkpoint_{attr}.pth'))
                 
         save_anticausal_predictor_results(loss_dict, self.result_dir)
         print("Training completed!")
